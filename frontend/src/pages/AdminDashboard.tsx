@@ -132,7 +132,7 @@ export default function AdminDashboard() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="admin-main max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-h1 font-semibold text-[var(--color-text-primary)]">
             Manage Documents
@@ -174,7 +174,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* URL input row */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+          <div className="scraper-row" style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
             <div style={{ flex: 2, minWidth: 220, position: 'relative' }}>
               <div style={{
                 position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)',

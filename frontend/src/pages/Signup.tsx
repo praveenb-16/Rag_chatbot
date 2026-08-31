@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { authApi, ApiError } from '../lib/api';
 
-// ── Password policy checks ─────────────────────────────────────────────────
 const checks = [
   { id: 'len',     label: 'At least 8 characters',        test: (p: string) => p.length >= 8 },
   { id: 'upper',   label: 'One uppercase letter (A–Z)',    test: (p: string) => /[A-Z]/.test(p) },
@@ -26,7 +25,6 @@ export default function Signup() {
   const { signup } = useAuth();
   const navigate = useNavigate();
 
-  // Form fields
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -34,22 +32,19 @@ export default function Signup() {
   const [otp, setOtp]           = useState('');
   const [showPw, setShowPw]     = useState(false);
 
-  // OTP state
   const [otpSent, setOtpSent]         = useState(false);
   const [otpSending, setOtpSending]   = useState(false);
   const [otpMsg, setOtpMsg]           = useState('');
   const [otpCountdown, setOtpCountdown] = useState(0);
 
-  // Submit state
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
   const score = strengthScore(password);
-  const { text: strengthText, color: strengthColor } = strengthLabel(score);
+  const { color: strengthColor } = strengthLabel(score);
   const allChecksPass = score === 5;
   const passwordsMatch = password === confirm && confirm.length > 0;
 
-  // ── Send OTP ──────────────────────────────────────────────────────────────
   const handleSendOTP = async () => {
     setOtpMsg('');
     if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
@@ -61,11 +56,7 @@ export default function Signup() {
       const res = await authApi.sendOTP(email.trim().toLowerCase());
       setOtpSent(true);
       setOtpMsg(res.message);
-      // 10-min countdown
-      let secs = parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10) * 60;
-      // use 60s for UX re-send cooldown
-      secs = 60;
-      setOtpCountdown(secs);
+      setOtpCountdown(60);
       const timer = setInterval(() => {
         setOtpCountdown(prev => {
           if (prev <= 1) { clearInterval(timer); return 0; }
@@ -79,11 +70,9 @@ export default function Signup() {
     }
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-
     if (!name.trim())         { setError('Full name is required'); return; }
     if (!email.trim())        { setError('Email is required'); return; }
     if (!allChecksPass)       { setError('Password does not meet the requirements'); return; }
@@ -102,295 +91,151 @@ export default function Signup() {
     }
   };
 
-  // ── Styles ─────────────────────────────────────────────────────────────────
   const inputStyle = (hasErr = false): React.CSSProperties => ({
-    width: '100%', padding: '10px 12px',
-    border: `1.5px solid ${hasErr ? 'var(--red, #EF4444)' : 'var(--border, #E2E5EE)'}`,
+    width: '100%', padding: '10px 14px',
+    border: `1.5px solid ${hasErr ? '#FECACA' : 'var(--border)'}`,
     borderRadius: 10, fontSize: 14, fontFamily: 'inherit',
-    color: 'var(--text-primary, #1A1F2E)', outline: 'none', background: '#fff',
+    background: 'var(--surface)', color: 'var(--text-primary)',
+    outline: 'none', boxSizing: 'border-box' as const,
     transition: 'border-color 0.15s',
-    boxSizing: 'border-box',
   });
-  const labelStyle: React.CSSProperties = {
-    fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #1A1F2E)',
-    display: 'block', marginBottom: 5,
-  };
-  const fieldStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 0 };
 
   return (
-    <div style={{
-      minHeight: '100vh', background: 'var(--surface-2, #F7F8FA)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px',
-    }}>
-      <div style={{ width: '100%', maxWidth: 460 }}>
-
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14, background: 'var(--navy, #1B2B4B)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 14px',
-          }}>
-            <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-              <circle cx="13" cy="13" r="9" stroke="#4A90D9" strokeWidth="1.6" fill="none"/>
-              <circle cx="13" cy="13" r="2.5" fill="#4A90D9"/>
-              <path d="M13 8v5l3.5 3.5" stroke="#4A90D9" strokeWidth="1.5" strokeLinecap="round"/>
+    <div style={{ minHeight: '100dvh', display: 'flex', fontFamily: 'Inter, sans-serif', background: 'var(--surface-2)' }}>
+      {/* ── Left panel (branding) ── */}
+      <div className="login-brand-panel" style={{ flex: '0 0 420px', background: 'var(--navy-deep)', display: 'flex', flexDirection: 'column', padding: '48px 44px', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: -80, right: -80, width: 300, height: 300, borderRadius: '50%', background: 'rgba(74,144,217,0.07)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -60, left: -60, width: 220, height: 220, borderRadius: '50%', background: 'rgba(74,144,217,0.05)', pointerEvents: 'none' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'auto' }}>
+          <div style={{ width: 42, height: 42, borderRadius: 11, background: 'rgba(74,144,217,0.15)', border: '1px solid rgba(74,144,217,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <circle cx="11" cy="11" r="6.5" stroke="#4A90D9" strokeWidth="1.4" fill="none"/>
+              <circle cx="11" cy="11" r="2" fill="#4A90D9"/>
+              <path d="M11 7v4l2.5 2.5" stroke="#4A90D9" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--navy, #1B2B4B)', margin: '0 0 4px', letterSpacing: '-0.3px' }}>
-            Create your account
-          </h1>
-          <p style={{ fontSize: 13.5, color: 'var(--text-muted, #8B96A8)', margin: 0 }}>
-            Join KIOT Assistant
-          </p>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '-0.3px' }}>AI Nexus</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>KIOT Knowledge Assistant</div>
+          </div>
         </div>
+        <div style={{ marginTop: 'auto', paddingTop: 40 }}>
+          <h2 style={{ fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: '-0.6px', lineHeight: 1.2, margin: '0 0 14px' }}>
+            Join your institutional<br/>knowledge base
+          </h2>
+          <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, margin: '0 0 32px' }}>
+            Create an account to ask questions, explore documents, and find verified answers instantly.
+          </p>
+          {[
+            { icon: '🔒', text: 'Secure, private conversations' },
+            { icon: '⚡', text: 'Instant answers grounded in truth' },
+            { icon: '📱', text: 'Access across all your devices' },
+          ].map(({ icon, text }) => (
+            <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
+              <span style={{ fontSize: 15, flexShrink: 0 }}>{icon}</span>
+              <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>{text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
-        {/* Card */}
-        <div style={{
-          background: '#fff', border: '1px solid var(--border, #E2E5EE)',
-          borderRadius: 16, padding: '28px 32px',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-        }}>
-          <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* ── Right panel (form) ── */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', padding: '32px 24px', overflowY: 'auto' }}>
+        <div style={{ width: '100%', maxWidth: 420 }}>
+          <div style={{ marginBottom: 24 }}>
+            <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--navy)', letterSpacing: '-0.5px', margin: '0 0 6px' }}>
+              Create an account
+            </h1>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
+              Join AI Nexus to get started
+            </p>
+          </div>
 
-            {/* Global error */}
+          <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {error && (
-              <div style={{
-                padding: '10px 14px', borderRadius: 8, fontSize: 13,
-                background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626',
-              }} role="alert">
+              <div role="alert" style={{ display: 'flex', gap: 8, padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, color: '#DC2626', fontSize: 13 }}>
                 {error}
               </div>
             )}
 
-            {/* Full name */}
-            <div style={fieldStyle}>
-              <label style={labelStyle} htmlFor="signup-name">Full name</label>
-              <input
-                id="signup-name" type="text" value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Jane Smith"
-                autoComplete="name" autoFocus
-                style={inputStyle()}
-                onFocus={e => (e.target.style.borderColor = 'var(--blue, #4A90D9)')}
-                onBlur={e => (e.target.style.borderColor = 'var(--border, #E2E5EE)')}
-              />
+            <div>
+              <label htmlFor="signup-name" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>Full name</label>
+              <input id="signup-name" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" autoFocus style={inputStyle()} onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue)'; }} onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)'; }} />
             </div>
 
-            {/* Email + Send OTP */}
-            <div style={fieldStyle}>
-              <label style={labelStyle} htmlFor="signup-email">Email address</label>
+            <div>
+              <label htmlFor="signup-email" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>Email address</label>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  id="signup-email" type="email" value={email}
-                  onChange={e => { setEmail(e.target.value); setOtpSent(false); setOtpMsg(''); }}
-                  placeholder="you@college.edu"
-                  autoComplete="email"
-                  style={{ ...inputStyle(), flex: 1 }}
-                  onFocus={e => (e.target.style.borderColor = 'var(--blue, #4A90D9)')}
-                  onBlur={e => (e.target.style.borderColor = 'var(--border, #E2E5EE)')}
-                />
-                <button
-                  type="button"
-                  id="send-otp-btn"
-                  onClick={handleSendOTP}
-                  disabled={otpSending || otpCountdown > 0}
-                  style={{
-                    flexShrink: 0, padding: '0 14px', borderRadius: 10, border: 'none',
-                    background: otpSending || otpCountdown > 0 ? 'var(--surface-3, #EFF1F5)' : 'var(--navy, #1B2B4B)',
-                    color: otpSending || otpCountdown > 0 ? 'var(--text-muted, #8B96A8)' : '#fff',
-                    fontSize: 12.5, fontWeight: 600, cursor: otpSending || otpCountdown > 0 ? 'not-allowed' : 'pointer',
-                    fontFamily: 'inherit', whiteSpace: 'nowrap', transition: 'all 0.15s',
-                  }}
-                >
-                  {otpSending ? 'Sending…' : otpCountdown > 0 ? `Resend (${otpCountdown}s)` : otpSent ? 'Resend OTP' : 'Verify Email'}
+                <input id="signup-email" type="email" value={email} onChange={e => { setEmail(e.target.value); setOtpSent(false); setOtpMsg(''); }} placeholder="you@kiot.ac.in" style={{ ...inputStyle(), flex: 1 }} onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue)'; }} onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)'; }} />
+                <button type="button" onClick={handleSendOTP} disabled={otpSending || otpCountdown > 0} style={{ flexShrink: 0, padding: '0 14px', borderRadius: 10, border: 'none', background: otpSending || otpCountdown > 0 ? 'var(--surface-3)' : 'var(--navy)', color: otpSending || otpCountdown > 0 ? 'var(--text-muted)' : '#fff', fontSize: 12.5, fontWeight: 600, cursor: otpSending || otpCountdown > 0 ? 'not-allowed' : 'pointer', transition: 'background 0.15s' }}>
+                  {otpSending ? 'Sending…' : otpCountdown > 0 ? `Wait ${otpCountdown}s` : otpSent ? 'Resend' : 'Verify'}
                 </button>
               </div>
-              {otpMsg && (
-                <p style={{
-                  fontSize: 12, marginTop: 5,
-                  color: otpMsg.startsWith('Verification') ? '#16A34A' : '#DC2626',
-                }}>
-                  {otpMsg}
-                </p>
-              )}
+              {otpMsg && <p style={{ fontSize: 12, marginTop: 4, color: otpMsg.includes('Verification') ? '#16A34A' : '#DC2626' }}>{otpMsg}</p>}
             </div>
 
-            {/* OTP input — shown after send */}
             {otpSent && (
-              <div style={fieldStyle}>
-                <label style={labelStyle} htmlFor="signup-otp">
+              <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                <label htmlFor="signup-otp" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
                   Enter 6-digit OTP
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6 }}>
-                    (sent to {email})
-                  </span>
                 </label>
-                <input
-                  id="signup-otp" type="text" inputMode="numeric"
-                  value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="• • • • • •"
-                  maxLength={6}
-                  style={{
-                    ...inputStyle(),
-                    letterSpacing: '0.35em', fontSize: 20, fontWeight: 700,
-                    textAlign: 'center', fontFamily: 'monospace',
-                    borderColor: otp.length === 6 ? '#22C55E' : 'var(--border)',
-                  }}
-                  onFocus={e => (e.target.style.borderColor = 'var(--blue, #4A90D9)')}
-                  onBlur={e => (e.target.style.borderColor = otp.length === 6 ? '#22C55E' : 'var(--border)')}
-                />
-                {otp.length === 6 && (
-                  <p style={{ fontSize: 11.5, color: '#16A34A', marginTop: 4 }}>
-                    ✓ OTP entered — will be verified on submit
-                  </p>
-                )}
+                <input id="signup-otp" type="text" inputMode="numeric" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••" style={{ ...inputStyle(false), letterSpacing: '0.2em', fontSize: 18, fontWeight: 700, textAlign: 'center', borderColor: otp.length === 6 ? '#22C55E' : 'var(--border)' }} onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue)'; }} onBlur={e => { e.currentTarget.style.borderColor = otp.length === 6 ? '#22C55E' : 'var(--border)'; }} />
               </div>
             )}
 
-            {/* Password */}
-            <div style={fieldStyle}>
-              <label style={labelStyle} htmlFor="signup-password">Password</label>
+            <div>
+              <label htmlFor="signup-password" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>Password</label>
               <div style={{ position: 'relative' }}>
-                <input
-                  id="signup-password"
-                  type={showPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Min. 8 characters"
-                  autoComplete="new-password"
-                  style={{ ...inputStyle(), paddingRight: 40 }}
-                  onFocus={e => (e.target.style.borderColor = 'var(--blue, #4A90D9)')}
-                  onBlur={e => (e.target.style.borderColor = 'var(--border, #E2E5EE)')}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(p => !p)}
-                  style={{
-                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                    border: 'none', background: 'transparent', cursor: 'pointer',
-                    color: 'var(--text-muted)', padding: 4,
-                  }}
-                  aria-label={showPw ? 'Hide password' : 'Show password'}
-                >
+                <input id="signup-password" type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Min. 8 characters" style={{ ...inputStyle(), paddingRight: 40 }} onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue)'; }} onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)'; }} />
+                <button type="button" onClick={() => setShowPw(v => !v)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
                   {showPw ? (
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 8s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z" stroke="currentColor" strokeWidth="1.2"/>
-                      <circle cx="8" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.2"/>
-                      <path d="M3 3l10 10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                    </svg>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8s2.5-5 6-5 6 5 6 5-2.5 5-6 5-6-5-6-5z" stroke="currentColor" strokeWidth="1.2"/><circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2"/><path d="M2 2l12 12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 8s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z" stroke="currentColor" strokeWidth="1.2"/>
-                      <circle cx="8" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.2"/>
-                    </svg>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8s2.5-5 6-5 6 5 6 5-2.5 5-6 5-6-5-6-5z" stroke="currentColor" strokeWidth="1.2"/><circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2"/></svg>
                   )}
                 </button>
               </div>
-
-              {/* Strength bar */}
               {password.length > 0 && (
                 <div style={{ marginTop: 8 }}>
                   <div style={{ display: 'flex', gap: 4, marginBottom: 5 }}>
                     {[1, 2, 3, 4, 5].map(i => (
-                      <div key={i} style={{
-                        flex: 1, height: 4, borderRadius: 2,
-                        background: i <= score ? strengthColor : 'var(--surface-4, #E5E8EF)',
-                        transition: 'background 0.2s',
-                      }} />
+                      <div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: i <= score ? strengthColor : 'var(--surface-4)', transition: 'background 0.2s' }} />
                     ))}
                   </div>
-                  <p style={{ fontSize: 11.5, color: strengthColor, fontWeight: 600, margin: '0 0 6px' }}>
-                    {strengthText}
-                  </p>
-                  {/* Checklist */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {checks.map(c => {
-                      const pass = c.test(password);
-                      return (
-                        <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5 }}>
-                          <span style={{ color: pass ? '#22C55E' : 'var(--text-muted)', lineHeight: 1 }}>
-                            {pass ? '✓' : '○'}
-                          </span>
-                          <span style={{ color: pass ? '#16A34A' : 'var(--text-muted, #8B96A8)' }}>
-                            {c.label}
-                          </span>
-                        </div>
-                      );
-                    })}
+                    {checks.map(c => (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5 }}>
+                        <span style={{ color: c.test(password) ? '#22C55E' : 'var(--text-muted)' }}>{c.test(password) ? '✓' : '○'}</span>
+                        <span style={{ color: c.test(password) ? '#16A34A' : 'var(--text-muted)' }}>{c.label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Confirm password */}
-            <div style={fieldStyle}>
-              <label style={labelStyle} htmlFor="signup-confirm">Confirm password</label>
-              <input
-                id="signup-confirm" type="password" value={confirm}
-                onChange={e => setConfirm(e.target.value)}
-                placeholder="Re-enter password"
-                autoComplete="new-password"
-                style={{
-                  ...inputStyle(),
-                  borderColor: confirm.length > 0
-                    ? passwordsMatch ? '#22C55E' : '#EF4444'
-                    : 'var(--border)',
-                }}
-                onFocus={e => (e.target.style.borderColor = 'var(--blue, #4A90D9)')}
-              />
-              {confirm.length > 0 && !passwordsMatch && (
-                <p style={{ fontSize: 11.5, color: '#DC2626', marginTop: 4 }}>Passwords do not match</p>
-              )}
-              {confirm.length > 0 && passwordsMatch && (
-                <p style={{ fontSize: 11.5, color: '#16A34A', marginTop: 4 }}>✓ Passwords match</p>
-              )}
+            <div>
+              <label htmlFor="signup-confirm" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>Confirm password</label>
+              <input id="signup-confirm" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Re-enter password" style={{ ...inputStyle(), borderColor: confirm.length > 0 ? (passwordsMatch ? '#22C55E' : '#EF4444') : 'var(--border)' }} onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue)'; }} onBlur={e => { e.currentTarget.style.borderColor = confirm.length > 0 ? (passwordsMatch ? '#22C55E' : '#EF4444') : 'var(--border)'; }} />
+              {confirm.length > 0 && !passwordsMatch && <p style={{ fontSize: 12, color: '#DC2626', marginTop: 4 }}>Passwords do not match</p>}
             </div>
 
-            {/* Security note */}
-            <div style={{
-              padding: '9px 12px', borderRadius: 8,
-              background: 'var(--surface-2, #F7F8FA)', border: '1px solid var(--border)',
-              fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.55,
-              display: 'flex', gap: 8, alignItems: 'flex-start',
-            }}>
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-                <path d="M6.5 1L2 3.5v3.5C2 9.5 4 11.5 6.5 12 9 11.5 11 9.5 11 7V3.5L6.5 1z" stroke="currentColor" strokeWidth="1.1"/>
-              </svg>
-              Your password is encrypted with bcrypt before being stored. We never store plaintext passwords.
-            </div>
-
-            {/* Submit */}
-            <button
-              id="signup-submit"
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%', padding: '11px', borderRadius: 10, border: 'none',
-                background: loading ? 'var(--surface-3)' : 'var(--navy, #1B2B4B)',
-                color: loading ? 'var(--text-muted)' : '#fff',
-                fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit', transition: 'all 0.15s',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              }}
-            >
+            <button type="submit" disabled={loading} style={{ width: '100%', marginTop: 8, padding: '12px 20px', background: loading ? 'var(--navy-mid)' : 'var(--navy)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: loading ? 'not-allowed' : 'pointer', transition: 'background 0.18s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               {loading ? (
                 <>
-                  <svg className="spin" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="20 10"/>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
+                    <path d="M7 1.5A5.5 5.5 0 0112.5 7" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
                   </svg>
                   Creating account…
                 </>
               ) : 'Create account'}
             </button>
           </form>
-        </div>
 
-        <p style={{ textAlign: 'center', fontSize: 13.5, color: 'var(--text-muted)', marginTop: 20 }}>
-          Already have an account?{' '}
-          <Link to="/login" style={{ color: 'var(--blue, #4A90D9)', fontWeight: 600, textDecoration: 'none' }}>
-            Sign in
-          </Link>
-        </p>
+          <p style={{ textAlign: 'center', fontSize: 13.5, color: 'var(--text-secondary)', marginTop: 24 }}>
+            Already have an account? <Link to="/login" style={{ color: 'var(--blue)', fontWeight: 500, textDecoration: 'none' }}>Sign in</Link>
+          </p>
+        </div>
       </div>
     </div>
   );

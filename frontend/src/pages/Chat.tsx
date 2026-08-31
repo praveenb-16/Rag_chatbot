@@ -22,6 +22,7 @@ export default function Chat() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
+  const pendingPromptRef = useRef<string | null>(null); // stores prompt from suggestion card click
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
@@ -36,6 +37,18 @@ export default function Chat() {
     }
   }, [messages, sending]);
 
+  // Auto-send pending prompt after navigation to a new session
+  useEffect(() => {
+    if (sessionId && pendingPromptRef.current && !chatLoading) {
+      const prompt = pendingPromptRef.current;
+      pendingPromptRef.current = null;
+      setInputValue('');
+      sendMessage(prompt).then(result => {
+        if (result) fetchSessions();
+      });
+    }
+  }, [sessionId, chatLoading, sendMessage, fetchSessions]);
+
   const handleNewChat = async () => {
     const newSession = await createSession();
     if (newSession) navigate(`/chat/${newSession._id}`);
@@ -46,16 +59,38 @@ export default function Chat() {
     if (id === sessionId) navigate('/chat');
   };
 
-  const handleSend = async (text: string) => {
+  const handleSend = async (val: string) => {
+    if (!val.trim() || sending) return;
+    setInputValue(''); // Optimistically clear input
+    
     if (!sessionId) {
-      const newSession = await createSession();
-      if (!newSession) return;
-      navigate(`/chat/${newSession._id}`);
+      const newSess = await createSession();
+      if (newSess) {
+        navigate(`/chat/${newSess._id}`, { replace: true });
+        // The message will be picked up by the useEffect below
+        pendingPromptRef.current = val;
+      } else {
+        // If session creation failed, restore input
+        setInputValue(val);
+      }
       return;
     }
-    setInputValue('');
-    const result = await sendMessage(text);
-    if (result && session?.title === 'New Chat') await fetchSessions();
+    
+    const result = await sendMessage(val);
+    if (!result) {
+      // If message failed to send, restore the user's input so they don't lose it
+      setInputValue(val);
+    } else if (session?.title === 'New Chat') {
+      await fetchSessions();
+    }
+  };
+
+  // Regenerate = re-send the last user message
+  const handleRegenerate = async () => {
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg && !sending) {
+      await sendMessage(lastUserMsg.content);
+    }
   };
 
   const handleLogout = async () => { await logout(); navigate('/login', { replace: true }); };
@@ -63,7 +98,7 @@ export default function Chat() {
   const userInitial = (user?.name?.[0] ?? '?').toUpperCase();
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--surface-2)' }}>
+    <div className="chat-root" style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: 'var(--surface-2)' }}>
 
       {/* ── Sidebar ── */}
       <Sidebar
@@ -73,30 +108,33 @@ export default function Chat() {
         onDeleteSession={handleDeleteSession}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        userName={user?.name}
+        onLogout={handleLogout}
       />
 
       {/* ── Main area ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+      <div className="chat-main" style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden' }}>
 
         {/* Top bar */}
-        <header style={{
+        <header className="chat-header" style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 24px', height: 56,
+          padding: '0 16px', height: 56,
           background: 'var(--surface)', borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
+          flexShrink: 0, position: 'relative',
         }}>
-          {/* Left */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Mobile hamburger */}
+          {/* LEFT zone: hamburger + desktop title */}
+          <div className="chat-header-left" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Hamburger — md:hidden hides it on tablet/desktop (≥768px) */}
             <button
               className="md:hidden"
               onClick={() => setSidebarOpen(true)}
               aria-label="Open sidebar"
               id="sidebar-toggle"
               style={{
-                width: 32, height: 32, border: 'none', background: 'transparent',
-                color: 'var(--text-muted)', cursor: 'pointer', borderRadius: 6,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 40, height: 40, border: 'none', background: 'transparent',
+                color: 'var(--text-muted)', cursor: 'pointer', borderRadius: 8,
+                alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, minHeight: 'unset',
               }}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -104,8 +142,8 @@ export default function Chat() {
               </svg>
             </button>
 
-            {/* Title group */}
-            <div>
+            {/* Desktop title — CSS hides on mobile */}
+            <div className="chat-title-desktop">
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--navy)', letterSpacing: '-0.3px', lineHeight: 1.2 }}>
                 AI Nexus
               </div>
@@ -113,29 +151,38 @@ export default function Chat() {
             </div>
           </div>
 
-          {/* Right */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {/* Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}
-              className="hidden sm:flex">
+          {/* CENTER — Mobile-only absolutely-centered title */}
+          <div className="chat-title-mobile">
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--navy)', letterSpacing: '-0.3px', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 5 }}>
+              AI Nexus
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', flexShrink: 0, display: 'inline-block' }} aria-label="Connected" />
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>KIOT Assistant</div>
+          </div>
+
+          {/* RIGHT zone */}
+          <div className="chat-header-right" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {/* Status — hidden on mobile */}
+            <div className="header-status hidden sm:flex" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
               <span className="pulse-dot" />
               Knowledge Base Connected
             </div>
 
-            {/* Model badge */}
-            <div style={{
+            {/* Model badge — hidden on mobile */}
+            <div className="header-model-badge hidden sm:block" style={{
               fontSize: 11, fontWeight: 600, color: 'var(--blue)',
               background: 'var(--blue-pale)', padding: '4px 10px',
               borderRadius: 9999, border: '1px solid rgba(74,144,217,0.2)',
-            }} className="hidden sm:block">
+            }}>
               GPT-4o + RAG
             </div>
 
-            {/* Admin link */}
+            {/* Admin link — hidden on mobile */}
             {user?.role === 'admin' && (
               <a
                 href="/admin"
                 id="admin-link"
+                className="header-admin-link hidden sm:inline-flex"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '5px 12px', fontSize: 12, fontWeight: 500,
@@ -143,7 +190,6 @@ export default function Chat() {
                   border: '1px solid rgba(74,144,217,0.2)', borderRadius: 8,
                   textDecoration: 'none', transition: 'all 0.15s',
                 }}
-                className="hidden sm:inline-flex"
               >
                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
                   <circle cx="6.5" cy="4.5" r="2" stroke="currentColor" strokeWidth="1.2"/>
@@ -153,31 +199,32 @@ export default function Chat() {
               </a>
             )}
 
-            {/* User avatar */}
+            {/* User avatar + name */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
-                width: 30, height: 30, borderRadius: '50%',
+                width: 32, height: 32, borderRadius: '50%',
                 background: 'var(--navy)', color: '#fff',
-                fontSize: 11, fontWeight: 700,
+                fontSize: 12, fontWeight: 700,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
               }}>
                 {userInitial}
               </div>
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}
-                className="hidden md:block">
+              <span className="header-username hidden md:block" style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
                 {user?.name}
               </span>
             </div>
 
-            {/* Logout */}
+            {/* Logout — hidden on mobile (accessible via sidebar drawer) */}
             <button
               onClick={handleLogout}
               aria-label="Sign out"
               id="logout-btn"
+              className="header-logout hidden sm:flex"
               style={{
-                width: 32, height: 32, border: 'none',
+                width: 36, height: 36, border: 'none', minHeight: 'unset',
                 background: 'transparent', color: 'var(--text-muted)',
-                cursor: 'pointer', borderRadius: 6,
+                cursor: 'pointer', borderRadius: 8,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'background 0.15s, color 0.15s',
               }}
@@ -192,8 +239,8 @@ export default function Chat() {
         </header>
 
         {/* ── Message area ── */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div style={{ maxWidth: 760, margin: '0 auto', padding: '28px 20px' }}>
+        <div className="chat-messages" style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="chat-messages-inner" style={{ maxWidth: 760, margin: '0 auto', padding: '28px 20px' }}>
 
             {/* Skeleton loader */}
             {chatLoading && (
@@ -207,18 +254,24 @@ export default function Chat() {
             )}
 
             {/* Welcome / empty state */}
-            {!chatLoading && !sessionId && (
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center',
-                justifyContent: 'center', minHeight: '60vh', textAlign: 'center', gap: 18,
-              }}>
+            {!chatLoading && messages.length === 0 && (
+              <div
+                className="welcome-section"
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', minHeight: '60vh', textAlign: 'center', gap: 18,
+                }}
+              >
                 {/* Icon */}
                 <div className="float-icon">
-                  <div style={{
-                    width: 64, height: 64, borderRadius: 16,
-                    background: 'var(--navy)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
+                  <div
+                    className="welcome-icon-wrap"
+                    style={{
+                      width: 64, height: 64, borderRadius: 16,
+                      background: 'var(--navy)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
                     <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
                       <circle cx="17" cy="17" r="10" stroke="#4A90D9" strokeWidth="1.6" fill="none"/>
                       <circle cx="17" cy="17" r="2.5" fill="#4A90D9"/>
@@ -227,17 +280,26 @@ export default function Chat() {
                   </div>
                 </div>
 
-                <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px', margin: 0 }}>
-                  How can I help you today?
+                <h1 className="welcome-title" style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px', margin: 0 }}>
+                  Welcome to AI Nexus
                 </h1>
 
-                <p style={{ fontSize: 14.5, color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 460, margin: 0 }}>
-                  Ask questions about your organization's knowledge base,
-                  documents, policies, projects, research, or technical information.
+                <p className="welcome-desc" style={{ fontSize: 14.5, color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 460, margin: 0 }}>
+                  Ask questions about KIOT's faculty, programs, policies, and documents. Every answer is grounded in the institutional knowledge base.
                 </p>
 
+                {/* Knowledge Base Stats Mock */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: -6, marginBottom: 12 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue)', background: 'var(--blue-pale)', padding: '4px 10px', borderRadius: 999 }}>
+                    📚 Connected to KIOT Knowledge Base
+                  </span>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                    Auto-synced
+                  </span>
+                </div>
+
                 {/* Prompt cards */}
-                <div style={{
+                <div className="prompt-grid" style={{
                   display: 'grid', gridTemplateColumns: '1fr 1fr',
                   gap: 10, width: '100%', maxWidth: 580, marginTop: 8,
                 }}>
@@ -249,14 +311,18 @@ export default function Chat() {
                   ].map(({ icon, text }) => (
                     <button
                       key={text}
-                      onClick={() => { setInputValue(text); handleNewChat(); }}
+                      className="prompt-card"
+                      onClick={() => {
+                        pendingPromptRef.current = text;
+                        handleNewChat();
+                      }}
                       style={{
                         display: 'flex', alignItems: 'flex-start', gap: 10,
                         padding: '13px 15px', textAlign: 'left',
                         background: 'var(--surface)', border: '1.5px solid var(--border)',
                         borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit',
                         fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45,
-                        transition: 'all 0.18s ease',
+                        transition: 'all 0.18s ease', minHeight: 'unset',
                       }}
                       onMouseEnter={e => {
                         e.currentTarget.style.borderColor = 'var(--blue)';
@@ -291,7 +357,13 @@ export default function Chat() {
             )}
 
             {/* Messages */}
-            {messages.map(msg => <MessageBubble key={msg._id} message={msg} />)}
+            {messages.map((msg, idx) => (
+              <MessageBubble
+                key={msg._id}
+                message={msg}
+                onRegenerate={msg.role === 'assistant' && idx === messages.length - 1 ? handleRegenerate : undefined}
+              />
+            ))}
 
             {/* Typing */}
             {sending && <LoadingBubble />}

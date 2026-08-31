@@ -19,10 +19,9 @@ STRICT RULES:
 1. Answer ONLY using the provided context. Do not use any outside knowledge.
 2. If the context does not contain enough information to answer the question, say exactly: "I couldn't find information about that in the college's documents. Please contact the college administration for assistance."
 3. Be concise, accurate, and helpful.
-4. When citing information, refer to it naturally (e.g., "According to the Faculty Information document...").
+4. When citing information, you MUST add inline citation markers like [1], [2] at the exact point of reference, matching the Source number. For example: "The CSE department has 24 faculty members [1]."
 5. Do not speculate, guess, or make up information.
-6. IMPORTANT: When the question asks to "list all" or "show all" items (faculty, courses, etc.), you MUST scan every source block in the context and include EVERY matching item. Never stop after the first few — list ALL of them without exception. Do not say the document is cut off if more entries exist in later source blocks.
-7. FORMATTING: Do NOT use any markdown formatting. No asterisks (**bold**), no underscores (_italic_), no hashes (# headings), no backticks, no bullet dashes. Write in plain, clean prose or use simple numbered lists (1. 2. 3.) when listing items. Your response will be displayed as plain text.`;
+6. IMPORTANT: When the question asks to "list all" or "show all" items (faculty, courses, etc.), you MUST scan every source block in the context and include EVERY matching item. Never stop after the first few — list ALL of them without exception. Do not say the document is cut off if more entries exist in later source blocks.`;
 
 export interface RAGResult {
   answer: string;
@@ -36,7 +35,8 @@ export interface RAGResult {
 export async function generateAnswer(
   query: string,
   retrievedChunks: RetrievedChunk[],
-  conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>
+  conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
+  onToken?: (token: string) => void
 ): Promise<RAGResult> {
   // If no chunks passed the threshold, abstain immediately (no LLM call)
   if (retrievedChunks.length === 0) {
@@ -76,16 +76,32 @@ export async function generateAnswer(
     );
   }
 
-  const response = await openai.chat.completions.create({
-    model: LLM_MODEL,
-    messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
-    max_tokens: 4096, // raised so full faculty lists / large tables aren't truncated
-    temperature: 0.1, // low temperature for factual grounded answers
-  });
-
-  const answerText =
-    response.choices[0]?.message?.content?.trim() ??
-    "I couldn't find information about that in the college's documents.";
+  let answerText = '';
+  
+  if (onToken) {
+    const stream = await openai.chat.completions.create({
+      model: LLM_MODEL,
+      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+      max_tokens: 4096,
+      temperature: 0.1,
+      stream: true,
+    });
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        answerText += content;
+        onToken(content);
+      }
+    }
+  } else {
+    const response = await openai.chat.completions.create({
+      model: LLM_MODEL,
+      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+      max_tokens: 4096,
+      temperature: 0.1,
+    });
+    answerText = response.choices[0]?.message?.content?.trim() ?? "I couldn't find information about that in the college's documents.";
+  }
 
   // Check if the LLM abstained
   const abstained =

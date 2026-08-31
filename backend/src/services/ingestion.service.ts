@@ -216,13 +216,14 @@ export async function ingestDocument(
                     text: `You are an OCR assistant. Extract ALL text from this PDF document exactly as it appears.\n- Preserve names, numbers, designations, departments, and any structured data (tables, lists).\n- If it contains tables, output them row by row, separating columns with " | ".\n- Do not add commentary, just return all extracted text.`,
                   },
                   {
-                    type: 'image_url' as const,
+                    type: 'image_url',
                     image_url: {
                       url: `data:application/pdf;base64,${base64Pdf}`,
-                      detail: 'high' as const,
+                      detail: 'high',
                     },
                   },
-                ] as OpenAI.Chat.ChatCompletionContentPart[],
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ] as any,
               },
             ],
           });

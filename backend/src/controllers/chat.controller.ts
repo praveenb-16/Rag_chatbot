@@ -127,12 +127,31 @@ export async function postMessage(req: Request, res: Response): Promise<void> {
       .filter((m) => m._id.toString() !== userMessage._id.toString()) // exclude current
       .map((m) => ({ role: m.role, content: m.content }));
 
-    // RAG Pipeline
+    // RAG Pipeline with streaming
     const retrievedChunks = await retrieveRelevantChunks(query.trim());
+    
+    // Set up SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+    
+    // Send initial metadata (citations) so frontend can show them immediately
+    // We don't have citations perfectly built yet because generateAnswer builds them.
+    // Actually, generateAnswer builds citations synchronously from retrievedChunks. 
+    // We can just let generateAnswer run, and we'll send the tokens.
+    // Wait, generateAnswer needs to run, we can't send citations until it returns them.
+    // But we can send the token events inside the callback.
+    let isFirstToken = true;
+
     const { answer, citations, abstained } = await generateAnswer(
       query.trim(),
       retrievedChunks,
-      history
+      history,
+      (token) => {
+        // Just send the token
+        res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+      }
     );
 
     // Save assistant message
@@ -144,9 +163,16 @@ export async function postMessage(req: Request, res: Response): Promise<void> {
       abstained,
     });
 
-    res.json({ message: assistantMessage });
+    // Send final message object with citations
+    res.write(`data: ${JSON.stringify({ type: 'done', message: assistantMessage })}\n\n`);
+    res.end();
   } catch (err) {
     console.error('postMessage error:', err);
-    res.status(500).json({ error: 'Failed to process your query. Please try again.' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process your query. Please try again.' });
+    } else {
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Failed to process your query.' })}\n\n`);
+      res.end();
+    }
   }
 }

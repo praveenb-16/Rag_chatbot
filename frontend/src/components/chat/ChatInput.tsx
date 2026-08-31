@@ -7,17 +7,59 @@ interface ChatInputProps {
   onChange: (value: string) => void;
 }
 
-// Extend window for webkit prefix
+// ── Web Speech API type declarations (not in default TS lib) ────────────────
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
+    SpeechRecognition: new () => ISpeechRecognition;
+    webkitSpeechRecognition: new () => ISpeechRecognition;
+  }
+
+  interface ISpeechRecognition extends EventTarget {
+    lang: string;
+    continuous: boolean;
+    interimResults: boolean;
+    maxAlternatives: number;
+    start(): void;
+    stop(): void;
+    abort(): void;
+    onstart: ((this: ISpeechRecognition, ev: Event) => void) | null;
+    onend: ((this: ISpeechRecognition, ev: Event) => void) | null;
+    onresult: ((this: ISpeechRecognition, ev: ISpeechRecognitionEvent) => void) | null;
+    onerror: ((this: ISpeechRecognition, ev: ISpeechRecognitionErrorEvent) => void) | null;
+  }
+
+  interface ISpeechRecognitionEvent extends Event {
+    readonly resultIndex: number;
+    readonly results: ISpeechRecognitionResultList;
+  }
+
+  interface ISpeechRecognitionResultList {
+    readonly length: number;
+    item(index: number): ISpeechRecognitionResult;
+    [index: number]: ISpeechRecognitionResult;
+  }
+
+  interface ISpeechRecognitionResult {
+    readonly isFinal: boolean;
+    readonly length: number;
+    item(index: number): ISpeechRecognitionAlternative;
+    [index: number]: ISpeechRecognitionAlternative;
+  }
+
+  interface ISpeechRecognitionAlternative {
+    readonly transcript: string;
+    readonly confidence: number;
+  }
+
+  interface ISpeechRecognitionErrorEvent extends Event {
+    readonly error: string;
+    readonly message: string;
   }
 }
 
 export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const interimRef = useRef('');          // interim transcript from speech
   const baseValueRef = useRef('');        // value in input before mic started
 
@@ -72,7 +114,7 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
       setMicError(null);
     };
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: ISpeechRecognitionEvent) => {
       let interimTranscript = '';
       let finalTranscript = '';
 
@@ -96,7 +138,7 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
       onChange(combined.trimStart());
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
       if (event.error === 'not-allowed') {
         setMicError('Microphone permission denied. Please allow mic access in your browser.');
       } else if (event.error === 'no-speech') {
@@ -148,15 +190,14 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
   const canSend = value.trim().length > 0 && !disabled;
 
   return (
-    <div style={{
-      padding: '12px 24px 18px',
+    <div className="chat-input-bar" style={{
+      padding: '12px 20px 16px',
       background: 'var(--surface-2)',
       borderTop: '1px solid var(--border)',
       flexShrink: 0,
     }}>
-      <div style={{ maxWidth: 760, margin: '0 auto' }}>
-
-
+      <div className="chat-input-inner" style={{ maxWidth: 760, margin: '0 auto' }}>
+        {/* Removed mobile disclaimer to prevent DOM clutter */}
 
         {/* Mic error banner */}
         {micError && (
@@ -185,7 +226,7 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
             {/* Animated waveform bars */}
             <MicWaveform />
             Listening... speak now
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 4 }}>
+            <span className="hidden sm:inline" style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 4 }}>
               (press Esc or click mic to stop)
             </span>
             <button
@@ -206,19 +247,36 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
         <div style={{
           display: 'flex', alignItems: 'flex-end', gap: 8,
           background: 'var(--surface)',
-          border: `1.5px solid ${isListening ? '#EF4444' : focused ? 'var(--blue)' : 'var(--border)'}`,
-          borderRadius: 16, padding: '8px 10px',
+          border: `1px solid ${isListening ? '#EF4444' : focused ? 'var(--blue)' : 'var(--border-strong)'}`,
+          borderRadius: 24, padding: '6px 8px 6px 12px',
           boxShadow: isListening
             ? '0 0 0 3px rgba(239,68,68,0.1), 0 2px 8px rgba(0,0,0,0.06)'
             : focused
-              ? '0 0 0 3px rgba(74,144,217,0.1), 0 2px 8px rgba(0,0,0,0.06)'
+              ? '0 0 0 3px rgba(74,144,217,0.1), 0 4px 12px rgba(0,0,0,0.05)'
               : '0 2px 8px rgba(0,0,0,0.04)',
-          transition: 'border-color 0.18s, box-shadow 0.18s',
+          transition: 'all 0.2s',
         }}>
+          {/* + Button */}
+          <button
+            aria-label="Add attachment"
+            title="Attach file"
+            style={{
+              width: 32, height: 32, border: 'none', borderRadius: '50%',
+              background: 'transparent', color: 'var(--text-muted)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', flexShrink: 0, alignSelf: 'center',
+              transition: 'background 0.15s, color 0.15s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-3)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
 
-
-
-          {/* Textarea */}
+          {/* Textarea — starts single-line, grows with content */}
           <textarea
             ref={textareaRef}
             id="chat-input"
@@ -227,153 +285,124 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
             onKeyDown={handleKeyDown}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder={isListening ? '🎤 Listening...' : 'Ask anything about your knowledge base...'}
+            placeholder={isListening ? '🎤 Listening...' : 'Ask anything'}
             rows={1}
             disabled={disabled}
             aria-label="Chat message input"
             style={{
               flex: 1, resize: 'none', border: 'none', background: 'transparent',
-              outline: 'none', fontFamily: 'inherit', fontSize: 13.5,
-              color: 'var(--text-primary)', lineHeight: 1.6,
-              minHeight: 24, maxHeight: 160, padding: '4px 0',
+              outline: 'none', fontFamily: 'inherit', fontSize: 16,
+              color: 'var(--text-primary)', lineHeight: 1.5,
+              minHeight: 24, maxHeight: 160, padding: '7px 0',
               opacity: disabled ? 0.6 : 1,
+              overflowY: 'auto', alignSelf: 'center'
             }}
           />
 
-          {/* ── MIC BUTTON ── */}
-          {micSupported && (
-            <button
-              onClick={toggleMic}
-              title={isListening ? 'Stop recording (Esc)' : 'Start voice input'}
-              aria-label={isListening ? 'Stop voice recording' : 'Start voice input'}
-              aria-pressed={isListening}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'center' }}>
+            {/* Model Select */}
+            <select
+              className="model-select-mobile-hide"
               style={{
-                width: 32, height: 32, border: 'none', borderRadius: 8,
-                background: isListening ? '#EF4444' : 'transparent',
-                color: isListening ? '#fff' : 'var(--text-muted)',
-                cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all 0.18s ease', flexShrink: 0,
-                // Pulse ring when active
-                boxShadow: isListening ? '0 0 0 4px rgba(239,68,68,0.2)' : 'none',
-                animation: isListening ? 'mic-pulse 1.5s ease-in-out infinite' : 'none',
+                padding: '4px 8px', borderRadius: 16, border: '1px solid var(--border)',
+                background: 'var(--surface-2)',
+                color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+                transition: 'background 0.15s'
               }}
-              onMouseEnter={e => {
-                if (!isListening) {
-                  e.currentTarget.style.background = 'var(--surface-3)';
-                  e.currentTarget.style.color = 'var(--text-primary)';
-                }
-              }}
-              onMouseLeave={e => {
-                if (!isListening) {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--text-muted)';
-                }
-              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'var(--surface-2)'}
             >
-              {isListening ? (
-                /* Stop icon when recording */
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                  <rect x="2" y="2" width="8" height="8" rx="1.5"/>
+              <option>GPT-4o</option>
+              <option>GPT-4 Turbo</option>
+              <option>Claude 3.5</option>
+            </select>
+
+            {/* MIC BUTTON */}
+            {micSupported && (
+              <button
+                onClick={toggleMic}
+                title={isListening ? 'Stop recording (Esc)' : 'Start voice input'}
+                aria-label={isListening ? 'Stop voice recording' : 'Start voice input'}
+                aria-pressed={isListening}
+                style={{
+                  width: 32, height: 32, border: 'none', borderRadius: '50%',
+                  background: isListening ? '#EF4444' : 'transparent',
+                  color: isListening ? '#fff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.18s ease', flexShrink: 0,
+                  boxShadow: isListening ? '0 0 0 4px rgba(239,68,68,0.2)' : 'none',
+                  animation: isListening ? 'mic-pulse 1.5s ease-in-out infinite' : 'none',
+                }}
+                onMouseEnter={e => {
+                  if (!isListening) {
+                    e.currentTarget.style.background = 'var(--surface-3)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isListening) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }
+                }}
+              >
+                {isListening ? (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                    <rect x="2" y="2" width="8" height="8" rx="1.5"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" x2="12" y1="19" y2="22"></line>
+                  </svg>
+                )}
+              </button>
+            )}
+
+            {/* Send button */}
+            <button
+              onClick={handleSend}
+              disabled={!canSend}
+              aria-label="Send message"
+              id="send-btn"
+              style={{
+                width: 36, height: 36, borderRadius: '50%', border: 'none',
+                background: canSend ? 'var(--blue)' : 'var(--surface-4)',
+                color: canSend ? '#fff' : 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: canSend ? 'pointer' : 'not-allowed',
+                flexShrink: 0, transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => { if (canSend) { e.currentTarget.style.background = '#3B82F6'; e.currentTarget.style.transform = 'scale(1.05)'; } }}
+              onMouseLeave={e => { if (canSend) { e.currentTarget.style.background = 'var(--blue)'; e.currentTarget.style.transform = 'scale(1)'; } }}
+            >
+              {disabled ? (
+                <svg className="spin" width="16" height="16" viewBox="0 0 14 14" fill="none">
+                  <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="20 10" opacity="0.8"/>
                 </svg>
               ) : (
-                /* Mic icon */
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-                  <path d="M7.5 1.5a2.5 2.5 0 012.5 2.5v4a2.5 2.5 0 01-5 0V4A2.5 2.5 0 017.5 1.5z" stroke="currentColor" strokeWidth="1.3"/>
-                  <path d="M3 7.5a4.5 4.5 0 009 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                  <path d="M7.5 12v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                  <path d="M5.5 14h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v20"></path>
+                  <path d="M5 9l7-7 7 7"></path>
                 </svg>
               )}
             </button>
-          )}
-
-          {/* Model select */}
-          <select
-            style={{
-              fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
-              background: 'var(--surface-2)', border: '1px solid var(--border)',
-              borderRadius: 6, padding: '4px 6px', cursor: 'pointer',
-              outline: 'none', fontFamily: 'inherit', flexShrink: 0,
-            }}
-          >
-            <option>GPT-4o</option>
-            <option>GPT-4 Turbo</option>
-            <option>Claude 3.5</option>
-          </select>
-
-          {/* Send button */}
-          <button
-            onClick={handleSend}
-            disabled={!canSend}
-            aria-label="Send message"
-            id="send-btn"
-            style={{
-              width: 34, height: 34, borderRadius: 10, border: 'none',
-              background: canSend ? 'var(--navy)' : 'var(--surface-4)',
-              color: canSend ? '#fff' : 'var(--text-muted)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: canSend ? 'pointer' : 'not-allowed',
-              flexShrink: 0, transition: 'all 0.15s ease',
-              boxShadow: canSend ? '0 2px 6px rgba(27,43,75,0.25)' : 'none',
-            }}
-            onMouseEnter={e => { if (canSend) { e.currentTarget.style.background = 'var(--navy-mid)'; e.currentTarget.style.transform = 'scale(1.05)'; } }}
-            onMouseLeave={e => { if (canSend) { e.currentTarget.style.background = 'var(--navy)'; e.currentTarget.style.transform = 'scale(1)'; } }}
-          >
-            {disabled ? (
-              <svg className="spin" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="20 10" opacity="0.8"/>
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M2 7l10-4.5L8 12l-1-3.5L2 7z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </button>
+          </div>
         </div>
 
-        {/* Disclaimer */}
-        <p style={{ fontSize: 11, color: 'var(--text-light)', textAlign: 'center', marginTop: 10 }}>
+        {/* Desktop disclaimer — hidden on mobile by CSS */}
+        <p className="chat-input-disclaimer" style={{ fontSize: 11, color: 'var(--text-light)', textAlign: 'center', marginTop: 10 }}>
           AI Nexus may make mistakes. Always verify critical information with source documents.
         </p>
       </div>
-
-      {/* Mic pulse keyframe injected inline */}
-      <style>{`
-        @keyframes mic-pulse {
-          0%, 100% { box-shadow: 0 0 0 3px rgba(239,68,68,0.25); }
-          50%       { box-shadow: 0 0 0 7px rgba(239,68,68,0.08); }
-        }
-        @keyframes bar-bounce {
-          0%, 100% { transform: scaleY(0.4); }
-          50%       { transform: scaleY(1); }
-        }
-      `}</style>
     </div>
   );
 }
 
 /* ── Small helper components ─────────────────────────────────────────────── */
-
-function ComposerIconBtn({ children, title }: { children: React.ReactNode; title: string }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      title={title}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        width: 32, height: 32, border: 'none', borderRadius: 7,
-        background: hov ? 'var(--surface-3)' : 'transparent',
-        color: hov ? 'var(--text-primary)' : 'var(--text-muted)',
-        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'background 0.15s, color 0.15s', flexShrink: 0,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
 
 /** Animated waveform bars shown in the "Listening..." banner */
 function MicWaveform() {

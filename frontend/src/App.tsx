@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ForgotPassword from './pages/ForgotPassword';
 import Chat from './pages/Chat';
 import AdminDashboard from './pages/AdminDashboard';
 
@@ -69,6 +70,14 @@ export default function App() {
         element={
           <PublicOnlyRoute>
             <Signup />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <PublicOnlyRoute>
+            <ForgotPassword />
           </PublicOnlyRoute>
         }
       />

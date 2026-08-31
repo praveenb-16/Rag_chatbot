@@ -44,28 +44,87 @@ export function useChat(sessionId: string | null) {
       setError(null);
 
       try {
-        const { message: assistantMsg } = await chatApi.sendMessage(
+        const url = `${import.meta.env.VITE_API_BASE_URL || '/api'}/chat/sessions/${sessionId}/messages`;
+        
+        // Optimistically add empty assistant message to stream into
+        const tempAssistantMsg: ChatMessage = {
+          _id: `temp-assistant-${Date.now()}`,
           sessionId,
-          query.trim()
-        );
-        // Remove temp, add real assistant message
-        setMessages((prev) => [
-          ...prev.filter((m) => m._id !== tempUserMsg._id),
-          // Add the real user message (returned server-side)
-          {
-            ...tempUserMsg,
-            _id: `user-${Date.now()}`,
+          role: 'assistant',
+          content: '',
+          citations: [],
+          abstained: false,
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, tempUserMsg, tempAssistantMsg]);
+        setSending(true);
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-          assistantMsg,
-        ]);
-        return assistantMsg;
+          body: JSON.stringify({ query: query.trim() }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        
+        let finalMessage: ChatMessage | null = null;
+
+        let buffer = '';
+
+        while (!done && reader) {
+          const { value, done: doneReading } = await reader.read();
+          done = doneReading;
+          if (value) {
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // keep the last incomplete line
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.type === 'token') {
+                    setMessages((prev) => 
+                      prev.map((m) => 
+                        m._id === tempAssistantMsg._id 
+                          ? { ...m, content: m.content + data.content } 
+                          : m
+                      )
+                    );
+                  } else if (data.type === 'done') {
+                    finalMessage = data.message;
+                    // Replace temp user and temp assistant with real user (which isn't returned, but we keep tempUserMsg) and real assistant msg
+                    setMessages((prev) => {
+                      const newPrev = prev.filter(m => m._id !== tempUserMsg._id && m._id !== tempAssistantMsg._id);
+                      return [
+                        ...newPrev,
+                        { ...tempUserMsg, _id: `user-${Date.now()}` },
+                        data.message
+                      ];
+                    });
+                  } else if (data.type === 'error') {
+                    throw new Error(data.error);
+                  }
+                } catch (e) {
+                  // JSON parse error on incomplete chunks can happen, but SSE lines are usually full JSON
+                  console.error('SSE parse error:', e);
+                }
+              }
+            }
+          }
+        }
+        return finalMessage;
       } catch (err) {
-        // Remove optimistic message on error
-        setMessages((prev) => prev.filter((m) => m._id !== tempUserMsg._id));
-        const msg =
-          err instanceof ApiError
-            ? err.message
-            : 'Failed to send message. Please try again.';
+        // Remove optimistic messages on error
+        setMessages((prev) => prev.filter((m) => m._id !== tempUserMsg._id && !m._id.startsWith('temp-assistant-')));
+        const msg = err instanceof Error ? err.message : 'Failed to send message. Please try again.';
         setError(msg);
         return null;
       } finally {
