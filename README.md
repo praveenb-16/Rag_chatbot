@@ -6,11 +6,20 @@ A full-stack Retrieval-Augmented Generation (RAG) chatbot for colleges. Students
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18 + Vite + TypeScript + Tailwind CSS |
+| Frontend | React 18 + Vite + TypeScript + Vanilla CSS |
 | Backend | Node.js + Express + TypeScript |
 | Database + Vector Store | MongoDB Atlas + Atlas Vector Search |
 | LLM + Embeddings | OpenRouter API (OpenAI-compatible) |
 | Auth | JWT in httpOnly cookies |
+
+## Features
+
+- **Enterprise-Grade UI/UX**: Custom responsive layout featuring a sleek, pill-shaped composer, dynamic sidebars, and fluid animations.
+- **Voice Input**: Integrated Web Speech API support for continuous voice dictation with animated audio waveform feedback.
+- **Mobile First & Accessible**: Typography scaled to prevent iOS auto-zoom, and all interactive elements meet the minimum `44x44px` touch target requirements.
+- **Rich Markdown & Citations**: Fully renders markdown (tables, code blocks) and features interactive citation chips that smoothly highlight their source references in the chat.
+- **Admin Dashboard**: Manage the knowledge base by uploading, updating, or deleting documents directly from the UI.
+- **Strict Grounding**: The RAG pipeline automatically abstains from answering if no relevant chunks are found, avoiding hallucination.
 
 ---
 
