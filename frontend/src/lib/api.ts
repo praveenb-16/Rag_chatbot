@@ -1,4 +1,4 @@
-let BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '');
+export let BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '');
 if (import.meta.env.VITE_API_BASE_URL && !BASE_URL.endsWith('/api')) {
   BASE_URL += '/api';
 }

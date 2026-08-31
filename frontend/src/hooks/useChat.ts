@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { chatApi, ChatMessage, ChatSession, ApiError } from '../lib/api';
+import { chatApi, ChatMessage, ChatSession, ApiError, BASE_URL } from '../lib/api';
 
 export function useChat(sessionId: string | null) {
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -44,7 +44,7 @@ export function useChat(sessionId: string | null) {
       setError(null);
 
       try {
-        const url = `${import.meta.env.VITE_API_BASE_URL || '/api'}/chat/sessions/${sessionId}/messages`;
+        const url = `${BASE_URL}/chat/sessions/${sessionId}/messages`;
         
         // Optimistically add empty assistant message to stream into
         const tempAssistantMsg: ChatMessage = {
