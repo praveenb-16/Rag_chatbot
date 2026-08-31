@@ -1,4 +1,7 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '');
+let BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '');
+if (import.meta.env.VITE_API_BASE_URL && !BASE_URL.endsWith('/api')) {
+  BASE_URL += '/api';
+}
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
