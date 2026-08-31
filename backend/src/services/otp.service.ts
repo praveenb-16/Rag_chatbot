@@ -12,10 +12,11 @@ let transporter: nodemailer.Transporter | null = null;
 
 function getTransporter(): nodemailer.Transporter {
   if (!transporter) {
+    const port = parseInt(process.env.SMTP_PORT || '465', 10);
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: 465,           // SSL — faster than STARTTLS (587)
-      secure: true,        // SSL from the start, no upgrade round-trip
+      port: port,
+      secure: port === 465, // SSL from the start for 465, STARTTLS for 587
       pool: true,          // keep connections alive between sends
       maxConnections: 3,
       maxMessages: 100,
