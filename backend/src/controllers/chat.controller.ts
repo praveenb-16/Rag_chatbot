@@ -154,11 +154,14 @@ export async function postMessage(req: Request, res: Response): Promise<void> {
       }
     );
 
+    // Don't save empty responses — use a fallback if the model returned nothing
+    const finalAnswer = answer?.trim() || "I'm sorry, I couldn't generate a response. Please try again.";
+
     // Save assistant message
     const assistantMessage = await Message.create({
       sessionId: id,
       role: 'assistant',
-      content: answer,
+      content: finalAnswer,
       citations,
       abstained,
     });

@@ -366,12 +366,14 @@ export default function Chat() {
               </div>
             )}
 
-            {/* Messages */}
-            {messages.map((msg, idx) => (
+            {/* Messages — skip empty assistant bubbles from stale/failed DB records */}
+            {messages
+              .filter(msg => !(msg.role === 'assistant' && !msg.content?.trim()))
+              .map((msg, idx, arr) => (
               <MessageBubble
                 key={msg._id}
                 message={msg}
-                onRegenerate={msg.role === 'assistant' && idx === messages.length - 1 ? handleRegenerate : undefined}
+                onRegenerate={msg.role === 'assistant' && idx === arr.length - 1 ? handleRegenerate : undefined}
               />
             ))}
 
