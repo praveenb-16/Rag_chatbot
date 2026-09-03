@@ -22,7 +22,7 @@ export default function Chat() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
-  const onSessionReadyRef = useRef<((id: string) => void) | null>(null); // callback after new session created
+  const pendingQueryRef = useRef<string | null>(null);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
@@ -37,14 +37,17 @@ export default function Chat() {
     }
   }, [messages, sending]);
 
-  // Fire onSessionReady callback when sessionId changes (new session navigated to)
+  // After navigating to a new session, fire any pending query.
+  // sendMessage is now stable (no deps), so this always uses the correct sessionId.
   useEffect(() => {
-    if (sessionId && onSessionReadyRef.current) {
-      const cb = onSessionReadyRef.current;
-      onSessionReadyRef.current = null;
-      cb(sessionId);
+    if (sessionId && pendingQueryRef.current) {
+      const query = pendingQueryRef.current;
+      pendingQueryRef.current = null;
+      sendMessage(query).then((result) => {
+        if (result) fetchSessions();
+      });
     }
-  }, [sessionId]);
+  }, [sessionId, sendMessage, fetchSessions]);
 
   const handleNewChat = async () => {
     const newSession = await createSession();
@@ -59,23 +62,20 @@ export default function Chat() {
   const handleSend = async (val: string) => {
     if (!val.trim() || sending) return;
     setInputValue('');
-    
+
     if (!sessionId) {
-      // Register a callback that fires once the new session's page loads
-      onSessionReadyRef.current = async (newSessionId: string) => {
-        const result = await sendMessage(val);
-        if (result) fetchSessions();
-      };
+      // Store query; the sessionId useEffect will fire sendMessage once we navigate
+      pendingQueryRef.current = val;
       const newSess = await createSession();
       if (newSess) {
         navigate(`/chat/${newSess._id}`, { replace: true });
       } else {
-        onSessionReadyRef.current = null;
+        pendingQueryRef.current = null;
         setInputValue(val);
       }
       return;
     }
-    
+
     const result = await sendMessage(val);
     if (!result) {
       setInputValue(val);
@@ -253,7 +253,7 @@ export default function Chat() {
             )}
 
             {/* Welcome / empty state */}
-            {!chatLoading && messages.length === 0 && (
+            {!chatLoading && !sending && messages.length === 0 && (
               <div
                 className="welcome-section"
                 style={{
@@ -312,16 +312,12 @@ export default function Chat() {
                       key={text}
                       className="prompt-card"
                       onClick={async () => {
-                        // Register callback that fires once the session page loads
-                        onSessionReadyRef.current = async () => {
-                          await sendMessage(text);
-                          fetchSessions();
-                        };
+                        pendingQueryRef.current = text;
                         const newSess = await createSession();
                         if (newSess) {
                           navigate(`/chat/${newSess._id}`, { replace: true });
                         } else {
-                          onSessionReadyRef.current = null;
+                          pendingQueryRef.current = null;
                         }
                       }}
                       style={{
