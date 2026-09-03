@@ -73,27 +73,14 @@ export async function sendSignupOTP(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Send OTP — treat post-delivery SMTP errors as non-fatal
-    try {
-      await sendOTP(normalised);
-    } catch (smtpErr) {
-      // Some SMTP providers (e.g. Gmail SMTP) deliver the email successfully
-      // but then close the connection with an error. If an active OTP now exists,
-      // the email was actually sent — return success.
-      if (await hasActiveOTP(normalised)) {
-        console.warn('OTP sent but SMTP threw post-delivery error (non-fatal):', smtpErr);
-        res.json({ message: `Verification code sent to ${normalised}` });
-        return;
-      }
-      throw smtpErr; // Re-throw only if OTP was never stored (genuine failure)
-    }
+    // Send OTP — will throw if SMTP is not configured or delivery fails
+    await sendOTP(normalised);
 
     res.json({ message: `Verification code sent to ${normalised}` });
   } catch (err) {
     console.error('OTP send error:', err);
-    res.status(500).json({
-      error: 'Failed to send verification email. Check your SMTP settings in .env.',
-    });
+    const message = err instanceof Error ? err.message : 'Failed to send verification email';
+    res.status(500).json({ error: message });
   }
 }
 

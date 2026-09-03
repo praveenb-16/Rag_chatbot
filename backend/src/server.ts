@@ -11,13 +11,21 @@ import { errorHandler, notFound } from './middleware/error.middleware';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
+// Support comma-separated list of allowed origins e.g.
+// CORS_ORIGIN=https://college-assistant-kiot.vercel.app,http://localhost:5173
+const rawOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim());
 
 // ── Middleware ──────────────────────────────────────────────────────────────
 app.use(
   cors({
-    origin: CORS_ORIGIN,
-    credentials: true, // required for httpOnly cookie to be sent cross-origin
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+      if (rawOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
+    credentials: true, // required for httpOnly cookie cross-origin
   })
 );
 app.use(cookieParser());
@@ -39,7 +47,7 @@ async function start(): Promise<void> {
   await connectDB();
   app.listen(PORT, () => {
     console.log(`🚀 Backend running on port ${PORT}`);
-    console.log(`   CORS origin: ${CORS_ORIGIN}`);
+    console.log(`   CORS origins: ${rawOrigins.join(', ')}`);
   });
 }
 
