@@ -243,7 +243,8 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
           </div>
         )}
 
-        {/* Composer */}
+        {/* Composer — wrapped in form so mobile keyboard 'Send'/'Go' submits */}
+        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} style={{ margin: 0 }}>
         <div style={{
           display: 'flex', alignItems: 'flex-end', gap: 8,
           background: 'var(--surface)',
@@ -289,6 +290,7 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
             rows={1}
             disabled={disabled}
             aria-label="Chat message input"
+            enterKeyHint="send"
             style={{
               flex: 1, resize: 'none', border: 'none', background: 'transparent',
               outline: 'none', fontFamily: 'inherit', fontSize: 16,
@@ -392,6 +394,7 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
             </button>
           </div>
         </div>
+        </form>
 
         {/* Desktop disclaimer — hidden on mobile by CSS */}
         <p className="chat-input-disclaimer" style={{ fontSize: 11, color: 'var(--text-light)', textAlign: 'center', marginTop: 10 }}>

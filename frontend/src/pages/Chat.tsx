@@ -27,7 +27,12 @@ export default function Chat() {
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
   useEffect(() => {
-    if (sessionId) { loadSession(); isFirstLoad.current = true; }
+    // Skip loading the session if we have a pending query to send — the sendMessage
+    // call below will optimistically add messages, and loadSession would wipe them.
+    if (sessionId && !pendingQueryRef.current) {
+      loadSession();
+      isFirstLoad.current = true;
+    }
   }, [sessionId, loadSession]);
 
   useEffect(() => {
@@ -38,11 +43,12 @@ export default function Chat() {
   }, [messages, sending]);
 
   // After navigating to a new session, fire any pending query.
-  // sendMessage is now stable (no deps), so this always uses the correct sessionId.
+  // sendMessage is stable (no stale closure) so it always uses the current sessionId.
   useEffect(() => {
     if (sessionId && pendingQueryRef.current) {
       const query = pendingQueryRef.current;
       pendingQueryRef.current = null;
+      isFirstLoad.current = true;
       sendMessage(query).then((result) => {
         if (result) fetchSessions();
       });
@@ -351,8 +357,8 @@ export default function Chat() {
               </div>
             )}
 
-            {/* Empty session */}
-            {!chatLoading && sessionId && messages.length === 0 && (
+            {/* Empty session — only show when truly idle */}
+            {!chatLoading && !sending && sessionId && messages.length === 0 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
                 <p style={{ fontSize: 13.5, color: 'var(--text-muted)' }}>
                   Start the conversation by typing a question below.

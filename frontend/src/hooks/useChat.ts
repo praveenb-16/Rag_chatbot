@@ -143,6 +143,7 @@ export function useChat(sessionId: string | null) {
   );
 
   const clearError = () => setError(null);
+  const resetMessages = () => setMessages([]);
 
   return {
     session,
@@ -153,5 +154,6 @@ export function useChat(sessionId: string | null) {
     loadSession,
     sendMessage,
     clearError,
+    resetMessages,
   };
 }
