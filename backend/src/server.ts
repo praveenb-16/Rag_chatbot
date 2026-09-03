@@ -1,4 +1,8 @@
 import 'dotenv/config';
+import dns from 'dns';
+// Force IPv4 for all DNS lookups — prevents ENETUNREACH errors on Render's free tier
+// where IPv6 routes to Gmail SMTP are blocked
+dns.setDefaultResultOrder('ipv4first');
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';

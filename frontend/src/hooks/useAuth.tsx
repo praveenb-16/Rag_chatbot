@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { authApi, User, ApiError } from '../lib/api';
+import { authApi, User, ApiError, tokenStorage } from '../lib/api';
 
 interface AuthContextValue {
   user: User | null;
@@ -18,19 +18,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Check authentication status on mount
+  // Check authentication status on mount using stored token
   useEffect(() => {
+    const token = tokenStorage.get();
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     authApi
       .me()
       .then(({ user }) => setUser(user))
-      .catch(() => setUser(null))
+      .catch(() => {
+        // Token expired or invalid — clear it
+        tokenStorage.clear();
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
     setError(null);
     try {
-      const { user } = await authApi.login({ email, password });
+      const { user, token } = await authApi.login({ email, password });
+      tokenStorage.set(token);
       setUser(user);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Login failed';
@@ -42,7 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = async (name: string, email: string, password: string, otp: string) => {
     setError(null);
     try {
-      const { user } = await authApi.signup({ name, email, password, otp });
+      const { user, token } = await authApi.signup({ name, email, password, otp });
+      tokenStorage.set(token);
       setUser(user);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Signup failed';
@@ -53,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await authApi.logout().catch(() => {});
+    tokenStorage.clear();
     setUser(null);
   };
 

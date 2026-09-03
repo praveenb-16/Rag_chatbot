@@ -29,11 +29,13 @@ const loginSchema = z.object({
 });
 
 // ── JWT cookie helper ──────────────────────────────────────────────────────
-function setTokenCookie(res: Response, userId: string, role: string): void {
+function generateToken(userId: string, role: string): string {
   const secret = process.env.JWT_SECRET!;
   const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
-  const token = jwt.sign({ userId, role }, secret, { expiresIn } as jwt.SignOptions);
+  return jwt.sign({ userId, role }, secret, { expiresIn } as jwt.SignOptions);
+}
 
+function setTokenCookie(res: Response, token: string): void {
   res.cookie('token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -118,9 +120,11 @@ export async function signup(req: Request, res: Response): Promise<void> {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const user = await User.create({ name: name.trim(), email: normalised, passwordHash, role: 'student' });
 
-    setTokenCookie(res, String(user._id), user.role);
+    const token = generateToken(String(user._id), user.role);
+    setTokenCookie(res, token);
 
     res.status(201).json({
+      token,
       user: { _id: user._id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt },
     });
   } catch (err) {
@@ -151,8 +155,10 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    setTokenCookie(res, String(user._id), user.role);
+    const token = generateToken(String(user._id), user.role);
+    setTokenCookie(res, token);
     res.json({
+      token,
       user: { _id: user._id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt },
     });
   } catch {

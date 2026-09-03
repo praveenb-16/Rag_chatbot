@@ -22,7 +22,15 @@ export async function requireAuth(
   next: NextFunction
 ): Promise<void> {
   try {
-    const token = req.cookies?.token;
+    // Read token from Authorization header first (mobile/cross-origin), then cookie fallback
+    let token: string | undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7);
+    } else {
+      token = req.cookies?.token;
+    }
+
     if (!token) {
       res.status(401).json({ error: 'Authentication required' });
       return;

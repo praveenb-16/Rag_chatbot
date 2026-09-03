@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { chatApi, ChatMessage, ChatSession, ApiError, BASE_URL } from '../lib/api';
+import { chatApi, ChatMessage, ChatSession, ApiError, BASE_URL, tokenStorage } from '../lib/api';
 
 export function useChat(sessionId: string | null) {
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -65,10 +65,13 @@ export function useChat(sessionId: string | null) {
       try {
         const url = `${BASE_URL}/chat/sessions/${currentSessionId}/messages`;
 
+        const token = tokenStorage.get();
         const response = await fetch(url, {
           method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ query: query.trim() }),
         });
 

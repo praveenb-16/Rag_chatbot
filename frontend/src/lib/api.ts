@@ -3,6 +3,21 @@ if (import.meta.env.VITE_API_BASE_URL && !BASE_URL.endsWith('/api')) {
   BASE_URL += '/api';
 }
 
+const TOKEN_KEY = 'kiot_auth_token';
+
+// ── Token helpers (localStorage — works cross-origin on all mobile browsers) ──
+export const tokenStorage = {
+  get: (): string | null => {
+    try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  },
+  set: (token: string): void => {
+    try { localStorage.setItem(TOKEN_KEY, token); } catch { /* ignore */ }
+  },
+  clear: (): void => {
+    try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  },
+};
+
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
 interface ApiOptions {
@@ -23,11 +38,17 @@ class ApiError extends Error {
 async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const { method = 'GET', body, headers = {} } = options;
 
+  const authHeaders: Record<string, string> = {};
+  const token = tokenStorage.get();
+  if (token) {
+    authHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
   const config: RequestInit = {
     method,
-    credentials: 'include', // always send httpOnly cookies
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...headers,
     },
   };
@@ -47,9 +68,15 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
 }
 
 async function uploadFile<T>(path: string, formData: FormData): Promise<T> {
+  const authHeaders: Record<string, string> = {};
+  const token = tokenStorage.get();
+  if (token) {
+    authHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
-    credentials: 'include',
+    headers: authHeaders,
     body: formData,
     // Do NOT set Content-Type — browser sets it with multipart boundary automatically
   });
@@ -63,9 +90,15 @@ async function uploadFile<T>(path: string, formData: FormData): Promise<T> {
 }
 
 async function updateWithFile<T>(path: string, formData: FormData): Promise<T> {
+  const authHeaders: Record<string, string> = {};
+  const token = tokenStorage.get();
+  if (token) {
+    authHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'PUT',
-    credentials: 'include',
+    headers: authHeaders,
     body: formData,
   });
 
@@ -83,10 +116,10 @@ export const authApi = {
     request<{ message: string }>('/auth/send-otp', { method: 'POST', body: { email } }),
 
   signup: (data: { name: string; email: string; password: string; otp: string }) =>
-    request<{ user: User }>('/auth/signup', { method: 'POST', body: data }),
+    request<{ user: User; token: string }>('/auth/signup', { method: 'POST', body: data }),
 
   login: (data: { email: string; password: string }) =>
-    request<{ user: User }>('/auth/login', { method: 'POST', body: data }),
+    request<{ user: User; token: string }>('/auth/login', { method: 'POST', body: data }),
 
   logout: () =>
     request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
