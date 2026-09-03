@@ -22,7 +22,7 @@ export default function Chat() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
-  const pendingPromptRef = useRef<string | null>(null); // stores prompt from suggestion card click
+  const onSessionReadyRef = useRef<((id: string) => void) | null>(null); // callback after new session created
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
@@ -37,17 +37,14 @@ export default function Chat() {
     }
   }, [messages, sending]);
 
-  // Auto-send pending prompt after navigation to a new session
+  // Fire onSessionReady callback when sessionId changes (new session navigated to)
   useEffect(() => {
-    if (sessionId && pendingPromptRef.current && !chatLoading) {
-      const prompt = pendingPromptRef.current;
-      pendingPromptRef.current = null;
-      setInputValue('');
-      sendMessage(prompt).then(result => {
-        if (result) fetchSessions();
-      });
+    if (sessionId && onSessionReadyRef.current) {
+      const cb = onSessionReadyRef.current;
+      onSessionReadyRef.current = null;
+      cb(sessionId);
     }
-  }, [sessionId, chatLoading, sendMessage, fetchSessions]);
+  }, [sessionId]);
 
   const handleNewChat = async () => {
     const newSession = await createSession();
@@ -61,16 +58,19 @@ export default function Chat() {
 
   const handleSend = async (val: string) => {
     if (!val.trim() || sending) return;
-    setInputValue(''); // Optimistically clear input
+    setInputValue('');
     
     if (!sessionId) {
+      // Register a callback that fires once the new session's page loads
+      onSessionReadyRef.current = async (newSessionId: string) => {
+        const result = await sendMessage(val);
+        if (result) fetchSessions();
+      };
       const newSess = await createSession();
       if (newSess) {
         navigate(`/chat/${newSess._id}`, { replace: true });
-        // The message will be picked up by the useEffect below
-        pendingPromptRef.current = val;
       } else {
-        // If session creation failed, restore input
+        onSessionReadyRef.current = null;
         setInputValue(val);
       }
       return;
@@ -78,7 +78,6 @@ export default function Chat() {
     
     const result = await sendMessage(val);
     if (!result) {
-      // If message failed to send, restore the user's input so they don't lose it
       setInputValue(val);
     } else if (session?.title === 'New Chat') {
       await fetchSessions();
@@ -312,9 +311,18 @@ export default function Chat() {
                     <button
                       key={text}
                       className="prompt-card"
-                      onClick={() => {
-                        pendingPromptRef.current = text;
-                        handleNewChat();
+                      onClick={async () => {
+                        // Register callback that fires once the session page loads
+                        onSessionReadyRef.current = async () => {
+                          await sendMessage(text);
+                          fetchSessions();
+                        };
+                        const newSess = await createSession();
+                        if (newSess) {
+                          navigate(`/chat/${newSess._id}`, { replace: true });
+                        } else {
+                          onSessionReadyRef.current = null;
+                        }
                       }}
                       style={{
                         display: 'flex', alignItems: 'flex-start', gap: 10,

@@ -56,8 +56,8 @@ export function useChat(sessionId: string | null) {
           abstained: false,
           createdAt: new Date().toISOString(),
         };
-        setMessages((prev) => [...prev, tempUserMsg, tempAssistantMsg]);
-        setSending(true);
+        // Only add tempAssistantMsg — tempUserMsg is already in state
+        setMessages((prev) => [...prev, tempAssistantMsg]);
 
         const response = await fetch(url, {
           method: 'POST',
