@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import OtpRecord from '../models/OtpRecord';
 
 const OTP_EXPIRES_MS =
@@ -33,16 +35,17 @@ function buildHtml(otp: string): string {
 }
 
 /**
- * Sends OTP email via Resend (HTTP API — no SMTP ports needed, works on Render free tier).
- * Falls back to nodemailer if RESEND_API_KEY is not set.
+ * Sends OTP via Resend (HTTP API — works on Render free tier) or falls back to nodemailer SMTP.
  */
 export async function sendOTP(email: string): Promise<void> {
   const normalised = email.toLowerCase();
   const otp = generateOTP();
   const expiresAt = new Date(Date.now() + OTP_EXPIRES_MS);
   const html = buildHtml(otp);
+  const subject = `${otp} — Your KIOT Assistant verification code`;
+  const text = `Your KIOT Assistant verification code is: ${otp}\n\nExpires in ${process.env.OTP_EXPIRES_MINUTES || 10} minutes.`;
 
-  // Save OTP to DB first
+  // Save OTP to DB
   await OtpRecord.findOneAndUpdate(
     { email: normalised },
     { otp, expiresAt },
@@ -52,18 +55,16 @@ export async function sendOTP(email: string): Promise<void> {
   const resendKey = process.env.RESEND_API_KEY;
 
   if (resendKey && resendKey !== 'your_resend_api_key') {
-    // ── Use Resend (HTTP API — no SMTP port issues) ────────────────────────
-    const { Resend } = await import('resend');
+    // ── Resend HTTP API (recommended — no SMTP port blocking) ─────────────
     const resend = new Resend(resendKey);
-
     const fromEmail = process.env.RESEND_FROM || 'KIOT Assistant <onboarding@resend.dev>';
 
     const { error } = await resend.emails.send({
       from: fromEmail,
       to: normalised,
-      subject: `${otp} — Your KIOT Assistant verification code`,
+      subject,
       html,
-      text: `Your KIOT Assistant verification code is: ${otp}\n\nExpires in ${process.env.OTP_EXPIRES_MINUTES || 10} minutes.`,
+      text,
     });
 
     if (error) {
@@ -71,40 +72,39 @@ export async function sendOTP(email: string): Promise<void> {
     }
   } else {
     // ── Fallback: nodemailer SMTP ─────────────────────────────────────────
-    const nodemailer = await import('nodemailer');
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
 
-    if (!user || !pass || user.includes('your_gmail')) {
+    if (!smtpUser || !smtpPass || smtpUser.includes('your_gmail')) {
       throw new Error(
-        'Email is not configured. Set RESEND_API_KEY (recommended) or SMTP_USER + SMTP_PASS in your environment.'
+        'Email not configured. Set RESEND_API_KEY (recommended) or SMTP_USER + SMTP_PASS in your environment.'
       );
     }
 
     const port = parseInt(process.env.SMTP_PORT || '587', 10);
-    const transporter = nodemailer.default.createTransport({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port,
       secure: port === 465,
-      auth: { user, pass },
-      family: 4, // force IPv4 — avoids ENETUNREACH on IPv6-only hosts
-    } as nodemailer.TransportOptions);
+      auth: { user: smtpUser, pass: smtpPass },
+      // Force IPv4 to avoid ENETUNREACH on IPv6-only servers
+      tls: { family: 4 },
+    } as any);
 
     await transporter.sendMail({
-      from: process.env.SMTP_FROM || `"KIOT Assistant" <${user}>`,
+      from: process.env.SMTP_FROM || `"KIOT Assistant" <${smtpUser}>`,
       to: normalised,
-      subject: `${otp} — Your KIOT Assistant verification code`,
+      subject,
       html,
-      text: `Your KIOT Assistant verification code is: ${otp}\n\nExpires in ${process.env.OTP_EXPIRES_MINUTES || 10} minutes.`,
+      text,
     });
   }
 
   console.log(`📧 OTP sent to ${normalised} (expires ${expiresAt.toISOString()})`);
 }
 
-/**
- * Verifies OTP from MongoDB — single atomic findOneAndDelete operation.
- */
+/** Verifies OTP from MongoDB — single atomic findOneAndDelete operation. */
 export async function verifyOTP(email: string, otp: string): Promise<boolean> {
   const normalised = email.toLowerCase();
   const record = await OtpRecord.findOneAndDelete({
