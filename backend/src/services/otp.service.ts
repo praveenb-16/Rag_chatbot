@@ -1,62 +1,15 @@
-import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import OtpRecord from '../models/OtpRecord';
 
 const OTP_EXPIRES_MS =
   parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10) * 60 * 1000;
 
-// ── Fix 1: Create ONE persistent pooled transporter at startup ────────────
-// pool:true keeps connections alive — no handshake overhead on every send
-// port 465 + secure:true (SSL) is faster than 587 + STARTTLS
-let transporter: nodemailer.Transporter | null = null;
-
-function getTransporter(): nodemailer.Transporter {
-  if (!transporter) {
-    const port = parseInt(process.env.SMTP_PORT || '465', 10);
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: port,
-      secure: port === 465, // SSL from the start for 465, STARTTLS for 587
-      pool: true,          // keep connections alive between sends
-      maxConnections: 3,
-      maxMessages: 100,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      connectionTimeout: 8000,
-      greetingTimeout: 5000,
-      socketTimeout: 10000,
-    } as nodemailer.TransportOptions);
-
-    // Warm up the connection pool immediately so first OTP is instant
-    transporter.verify().catch(() => {
-      // Silently ignore — will retry on first send
-    });
-  }
-  return transporter;
-}
-
-/** Throw early if SMTP is not configured */
-function assertSmtpConfigured(): void {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (
-    !user || user.includes('your_gmail') ||
-    !pass || pass.includes('your_gmail')
-  ) {
-    throw new Error(
-      'SMTP is not configured. Please set SMTP_USER and SMTP_PASS in .env'
-    );
-  }
-}
-
 /** Generate a cryptographically random 6-digit OTP */
 function generateOTP(): string {
   return crypto.randomInt(100000, 999999).toString();
 }
 
-// Pre-build the static parts of the email HTML once
+/** Build the OTP email HTML */
 function buildHtml(otp: string): string {
   return `<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;background:#fff;border:1px solid #E2E5EE;border-radius:12px;overflow:hidden;">
   <div style="background:#1B2B4B;padding:28px 32px;text-align:center;">
@@ -80,54 +33,85 @@ function buildHtml(otp: string): string {
 }
 
 /**
- * Sends OTP email.
- * Fix 2: DB upsert and SMTP send run IN PARALLEL (Promise.all) — cuts total
- *         time roughly in half vs doing them sequentially.
- * Fix 3: Transporter is reused (pooled) — no per-call connection setup.
+ * Sends OTP email via Resend (HTTP API — no SMTP ports needed, works on Render free tier).
+ * Falls back to nodemailer if RESEND_API_KEY is not set.
  */
 export async function sendOTP(email: string): Promise<void> {
-  assertSmtpConfigured();
-
   const normalised = email.toLowerCase();
   const otp = generateOTP();
   const expiresAt = new Date(Date.now() + OTP_EXPIRES_MS);
   const html = buildHtml(otp);
 
-  // ── Run DB save and email send simultaneously ────────────────────────────
-  await Promise.all([
-    // Upsert OTP record (creates or overwrites)
-    OtpRecord.findOneAndUpdate(
-      { email: normalised },
-      { otp, expiresAt },
-      { upsert: true, new: true }
-    ),
-    // Send email using pooled connection
-    getTransporter().sendMail({
-      from: process.env.SMTP_FROM || `"KIOT Assistant" <${process.env.SMTP_USER}>`,
+  // Save OTP to DB first
+  await OtpRecord.findOneAndUpdate(
+    { email: normalised },
+    { otp, expiresAt },
+    { upsert: true, new: true }
+  );
+
+  const resendKey = process.env.RESEND_API_KEY;
+
+  if (resendKey && resendKey !== 'your_resend_api_key') {
+    // ── Use Resend (HTTP API — no SMTP port issues) ────────────────────────
+    const { Resend } = await import('resend');
+    const resend = new Resend(resendKey);
+
+    const fromEmail = process.env.RESEND_FROM || 'KIOT Assistant <onboarding@resend.dev>';
+
+    const { error } = await resend.emails.send({
+      from: fromEmail,
       to: normalised,
       subject: `${otp} — Your KIOT Assistant verification code`,
       html,
       text: `Your KIOT Assistant verification code is: ${otp}\n\nExpires in ${process.env.OTP_EXPIRES_MINUTES || 10} minutes.`,
-    }),
-  ]);
+    });
+
+    if (error) {
+      throw new Error(`Resend delivery failed: ${error.message}`);
+    }
+  } else {
+    // ── Fallback: nodemailer SMTP ─────────────────────────────────────────
+    const nodemailer = await import('nodemailer');
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (!user || !pass || user.includes('your_gmail')) {
+      throw new Error(
+        'Email is not configured. Set RESEND_API_KEY (recommended) or SMTP_USER + SMTP_PASS in your environment.'
+      );
+    }
+
+    const port = parseInt(process.env.SMTP_PORT || '587', 10);
+    const transporter = nodemailer.default.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+      family: 4, // force IPv4 — avoids ENETUNREACH on IPv6-only hosts
+    } as nodemailer.TransportOptions);
+
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || `"KIOT Assistant" <${user}>`,
+      to: normalised,
+      subject: `${otp} — Your KIOT Assistant verification code`,
+      html,
+      text: `Your KIOT Assistant verification code is: ${otp}\n\nExpires in ${process.env.OTP_EXPIRES_MINUTES || 10} minutes.`,
+    });
+  }
 
   console.log(`📧 OTP sent to ${normalised} (expires ${expiresAt.toISOString()})`);
 }
 
 /**
- * Verifies OTP from MongoDB using findOneAndDelete — single atomic operation
- * instead of separate find + delete, cutting verification time in half.
+ * Verifies OTP from MongoDB — single atomic findOneAndDelete operation.
  */
 export async function verifyOTP(email: string, otp: string): Promise<boolean> {
   const normalised = email.toLowerCase();
-
-  // ── Fix 4: findOneAndDelete is ONE DB round-trip instead of two ──────────
   const record = await OtpRecord.findOneAndDelete({
     email: normalised,
     otp: otp.trim(),
-    expiresAt: { $gt: new Date() },   // not expired
+    expiresAt: { $gt: new Date() },
   });
-
   return record !== null;
 }
 
@@ -138,12 +122,4 @@ export async function hasActiveOTP(email: string): Promise<boolean> {
     expiresAt: { $gt: new Date() },
   });
   return count > 0;
-}
-
-// ── Warm up at module load so the first request is instant ──────────────────
-if (
-  process.env.SMTP_USER &&
-  !process.env.SMTP_USER.includes('your_gmail')
-) {
-  getTransporter(); // initialises pool and starts verify() in background
 }
