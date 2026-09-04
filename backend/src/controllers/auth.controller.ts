@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import User from '../models/User';
-import { sendOTP, verifyOTP, hasActiveOTP } from '../services/otp.service';
+import OtpRecord from '../models/OtpRecord';
+import { sendOTP, verifyOTP } from '../services/otp.service';
 
 const SALT_ROUNDS = 12;
 
@@ -59,6 +60,7 @@ export async function sendSignupOTP(req: Request, res: Response): Promise<void> 
     }
 
     const normalised = email.trim().toLowerCase();
+    console.log(`[OTP] Request for: ${normalised}`);
 
     // Check if email is already registered
     const existing = await User.findOne({ email: normalised });
@@ -67,17 +69,23 @@ export async function sendSignupOTP(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Rate-limit: don't spam
-    if (await hasActiveOTP(normalised)) {
-      res.status(429).json({
-        error: `An OTP was already sent. Please wait ${process.env.OTP_EXPIRES_MINUTES || 10} minutes before requesting a new one.`,
-      });
+    // Rate-limit: allow resend only after 60 seconds (not 10 min block)
+    // This prevents spam but lets users retry if the previous email failed
+    const recentOtp = await OtpRecord.findOne({
+      email: normalised,
+      createdAt: { $gt: new Date(Date.now() - 60_000) }, // within last 60s
+    });
+    if (recentOtp) {
+      console.log(`[OTP] Rate-limited: last sent ${Math.round((Date.now() - recentOtp.createdAt.getTime()) / 1000)}s ago`);
+      res.status(429).json({ error: 'Please wait 60 seconds before requesting a new code.' });
       return;
     }
 
+    console.log(`[OTP] Calling sendOTP for ${normalised}`);
     // Send OTP — will throw if SMTP is not configured or delivery fails
     await sendOTP(normalised);
 
+    console.log(`[OTP] Success for ${normalised}`);
     res.json({ message: `Verification code sent to ${normalised}` });
   } catch (err) {
     console.error('OTP send error:', err);
