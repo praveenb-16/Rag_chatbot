@@ -1,72 +1,112 @@
-# College RAG Chatbot
+# AI Nexus — KIOT Knowledge Assistant
 
-A full-stack Retrieval-Augmented Generation (RAG) chatbot for colleges. Students get grounded answers from official college documents with citations; admins manage the knowledge base.
+<div align="center">
 
-## Tech Stack
+**A production-ready RAG chatbot for KIOT (Knowledge Institute of Technology)**  
+Students get instant, grounded answers from official college documents with source citations.  
+Admins manage the entire knowledge base from a dedicated dashboard.
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 18 + Vite + TypeScript + Vanilla CSS |
-| Backend | Node.js + Express + TypeScript |
-| Database + Vector Store | MongoDB Atlas + Atlas Vector Search |
-| LLM + Embeddings | OpenRouter API (OpenAI-compatible) |
-| Auth | JWT in httpOnly cookies |
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-college--assistant--kiot.vercel.app-blue?style=flat-square)](https://college-assistant-kiot.vercel.app)
+[![Backend](https://img.shields.io/badge/Backend-Render-46E3B7?style=flat-square)](https://render.com)
+[![Frontend](https://img.shields.io/badge/Frontend-Vercel-black?style=flat-square)](https://vercel.com)
 
-## Features
-
-- **Enterprise-Grade UI/UX**: Custom responsive layout featuring a sleek, pill-shaped composer, dynamic sidebars, and fluid animations.
-- **Voice Input**: Integrated Web Speech API support for continuous voice dictation with animated audio waveform feedback.
-- **Mobile First & Accessible**: Typography scaled to prevent iOS auto-zoom, and all interactive elements meet the minimum `44x44px` touch target requirements.
-- **Rich Markdown & Citations**: Fully renders markdown (tables, code blocks) and features interactive citation chips that smoothly highlight their source references in the chat.
-- **Admin Dashboard**: Manage the knowledge base by uploading, updating, or deleting documents directly from the UI.
-- **Strict Grounding**: The RAG pipeline automatically abstains from answering if no relevant chunks are found, avoiding hallucination.
+</div>
 
 ---
 
-## Quick Start (Local Development)
+## ✨ Features
+
+### For Students
+- 💬 **GPT-style streaming chat** — answers stream in real-time token by token
+- 📚 **Source citations** — every answer shows exactly which document it came from
+- 🎙️ **Voice input** — speak your question with animated waveform feedback
+- 📱 **Mobile-first** — fully responsive, works on any device
+- 🔖 **Predefined prompts** — quick-start cards for common questions
+- 📋 **Chat history** — all sessions saved and accessible from the sidebar
+- 🔄 **Retry / Regenerate** — re-send the last message if needed
+
+### For Admins
+- 📂 **Document management** — upload, update, and delete PDF/DOCX/TXT documents
+- 🌐 **URL scraping** — ingest web pages directly by URL
+- 📊 **Processing status** — real-time ingestion status for each document
+- 🔐 **Role-based access** — admin routes protected separately from student routes
+
+### System
+- 🔐 **OTP email verification** — signup requires email verification via Brevo
+- 🛡️ **JWT Bearer token auth** — works cross-origin on all mobile browsers
+- 🚫 **Hallucination prevention** — auto-abstains when no relevant context is found
+- 💾 **Conversation history** — last 3 turns sent to LLM for context-aware answers
+
+---
+
+## 🏗️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | React 18 + Vite + TypeScript + Vanilla CSS |
+| **Backend** | Node.js + Express + TypeScript |
+| **Database** | MongoDB Atlas |
+| **Vector Search** | MongoDB Atlas Vector Search |
+| **LLM** | OpenRouter API (`openai/gpt-4o-mini`) |
+| **Embeddings** | OpenRouter API (`openai/text-embedding-3-small`) |
+| **Auth** | JWT Bearer Token (localStorage) |
+| **Email / OTP** | Brevo HTTP API (no SMTP — works on Render free tier) |
+| **Frontend Host** | Vercel |
+| **Backend Host** | Render |
+
+---
+
+## 🚀 Quick Start (Local Development)
 
 ### Prerequisites
 - Node.js 18+
-- MongoDB Atlas account
-- OpenRouter API key
+- MongoDB Atlas account (free tier works)
+- OpenRouter API key → [openrouter.ai](https://openrouter.ai)
+- Brevo account (free) → [app.brevo.com](https://app.brevo.com)
 
 ### 1. Clone and install
 
 ```bash
+git clone https://github.com/praveenb-16/Rag_chatbot.git
+cd Rag_chatbot
+
 # Backend
-cd backend
-npm install
+cd backend && npm install
 
 # Frontend
-cd ../frontend
-npm install
+cd ../frontend && npm install
 ```
 
 ### 2. Configure environment variables
 
-**Backend** — copy and fill in `backend/.env.example`:
-```bash
-cp backend/.env.example backend/.env
-```
+**`backend/.env`** (create this file):
 
 ```env
 PORT=5000
 MONGODB_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/college-rag
-JWT_SECRET=replace-with-a-long-random-string
+JWT_SECRET=your-long-random-secret-here
 JWT_EXPIRES_IN=7d
-OPENROUTER_API_KEY=sk-or-...
-OPENROUTER_MODEL=openrouter/auto
+
+# OpenRouter (LLM + Embeddings)
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=openai/gpt-4o-mini
 EMBEDDING_MODEL=openai/text-embedding-3-small
+
+# CORS — comma-separated list of allowed frontend origins
 CORS_ORIGIN=http://localhost:5173
+
+# Email / OTP via Brevo (HTTP API — no SMTP ports needed)
+BREVO_API_KEY=xkeysib-...
+BREVO_SENDER_EMAIL=your@email.com
+
+# Tuning
 MAX_UPLOAD_MB=20
-TOP_K=5
-RELEVANCE_THRESHOLD=0.75
+TOP_K=15
+RELEVANCE_THRESHOLD=0.40
+OTP_EXPIRES_MINUTES=10
 ```
 
-**Frontend** — copy and fill in `frontend/.env.example`:
-```bash
-cp frontend/.env.example frontend/.env
-```
+**`frontend/.env`** (create this file):
 
 ```env
 VITE_API_BASE_URL=http://localhost:5000/api
@@ -74,13 +114,13 @@ VITE_API_BASE_URL=http://localhost:5000/api
 
 ### 3. Set up MongoDB Atlas Vector Search Index
 
-> ⚠️ **Required before the RAG pipeline works.** Without this index, vector search will fail.
+> ⚠️ **Required before the RAG pipeline works.**
 
 1. Open [MongoDB Atlas](https://cloud.mongodb.com) → your cluster
-2. Go to **Search** → **Create Search Index**
-3. Choose **Atlas Vector Search** (JSON editor)
+2. Go to **Atlas Search** → **Create Search Index**
+3. Choose **Atlas Vector Search** → JSON editor
 4. Select database `college-rag`, collection `chunks`
-5. Use this index definition:
+5. Paste this index definition:
 
 ```json
 {
@@ -95,85 +135,96 @@ VITE_API_BASE_URL=http://localhost:5000/api
 }
 ```
 
-6. Name the index: **`chunk_embeddings`** (must match exactly)
-7. Click **Create Search Index** and wait for it to become Active
+6. Name the index exactly: **`chunk_embeddings`**
+7. Click **Create** and wait for status → **Active**
 
-### 4. Run the application
+### 4. Run locally
 
 ```bash
-# Terminal 1 — Backend
-cd backend
-npm run dev
+# Terminal 1 — Backend (http://localhost:5000)
+cd backend && npm run dev
 
-# Terminal 2 — Frontend
-cd frontend
-npm run dev
+# Terminal 2 — Frontend (http://localhost:5173)
+cd frontend && npm run dev
 ```
-
-Open [http://localhost:5173](http://localhost:5173)
 
 ---
 
-## Creating an Admin Account
+## 🔐 Creating an Admin Account
 
-Signup creates a student account by default. To create an admin:
+All signups create student accounts by default. To promote to admin:
 
-1. Sign up normally at `/signup`
-2. Connect to MongoDB Atlas and update the user document:
 ```js
-db.users.updateOne({ email: "your@email.com" }, { $set: { role: "admin" } })
+// Run in MongoDB Atlas → Collections → users
+db.users.updateOne(
+  { email: "admin@kiot.ac.in" },
+  { $set: { role: "admin" } }
+)
 ```
-Or use MongoDB Compass to edit the document.
+
+Or use **MongoDB Compass** to edit the document directly.
 
 ---
 
-## Deployment
+## ☁️ Deployment
 
 ### Backend → Render
 
-1. Create a new **Web Service** on [Render](https://render.com)
+1. Create a **Web Service** at [render.com](https://render.com)
 2. Connect your GitHub repository
-3. Set:
+3. Configure:
    - **Root Directory**: `backend`
    - **Build Command**: `npm install && npm run build`
    - **Start Command**: `npm start`
-4. Add all environment variables from `backend/.env.example`
-5. Set `CORS_ORIGIN` to your Vercel frontend URL
+4. Add all environment variables from the section above
+5. Set `CORS_ORIGIN` to include your Vercel URL:
+   ```
+   https://your-app.vercel.app,http://localhost:5173
+   ```
+
+> ⚠️ **Render free tier blocks all outbound SMTP ports (25, 465, 587).** That's why this project uses **Brevo HTTP API** for emails instead of nodemailer/Gmail SMTP.
 
 ### Frontend → Vercel
 
-1. Import your GitHub repository on [Vercel](https://vercel.com)
-2. Set:
+1. Import repository at [vercel.com](https://vercel.com)
+2. Configure:
    - **Root Directory**: `frontend`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
+   - **Framework Preset**: Vite
 3. Add environment variable:
-   - `VITE_API_BASE_URL` = your Render backend URL + `/api`
+   - `VITE_API_BASE_URL` = `https://your-render-backend.onrender.com/api`
+4. The `frontend/vercel.json` handles SPA routing automatically — no 404 on refresh.
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
-college-rag-chatbot/
+Rag_chatbot/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── chat/          # MessageBubble, ChatInput, Sidebar, CitationChip, LoadingBubble
-│   │   │   ├── admin/         # DocumentTable, UploadDropzone, StatusChip
-│   │   │   └── ui/            # Button, Input, Card
+│   │   │   ├── chat/          # MessageBubble, ChatInput, Sidebar,
+│   │   │   │                  # CitationChip, LoadingBubble
+│   │   │   └── admin/         # DocumentTable, UploadDropzone, StatusChip
 │   │   ├── pages/             # Login, Signup, Chat, AdminDashboard
 │   │   ├── hooks/             # useAuth, useSessions, useChat
-│   │   ├── lib/api.ts
+│   │   ├── lib/
+│   │   │   └── api.ts         # Centralized API client (Bearer token auth)
 │   │   └── App.tsx
+│   ├── vercel.json            # SPA routing rewrite rules
 │   └── package.json
 ├── backend/
 │   ├── src/
-│   │   ├── routes/
-│   │   ├── controllers/
-│   │   ├── models/
-│   │   ├── services/          # ingestion, retrieval, rag
-│   │   ├── middleware/
+│   │   ├── routes/            # auth, chat, documents, health
+│   │   ├── controllers/       # auth, chat, documents
+│   │   ├── models/            # User, Session, Message, Chunk, OtpRecord
+│   │   ├── services/
+│   │   │   ├── ingestion.service.ts   # PDF/DOCX/TXT → chunks → embeddings
+│   │   │   ├── retrieval.service.ts   # Atlas Vector Search
+│   │   │   ├── rag.service.ts         # LLM call + citation builder
+│   │   │   ├── otp.service.ts         # Brevo email API
+│   │   │   └── scraping.service.ts    # URL → text ingestion
+│   │   ├── middleware/        # requireAuth, error handler
 │   │   └── server.ts
 │   └── package.json
 └── README.md
@@ -181,33 +232,76 @@ college-rag-chatbot/
 
 ---
 
-## API Reference
+## 🔌 API Reference
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/api/auth/signup` | none | Create student account |
-| POST | `/api/auth/login` | none | Login |
-| POST | `/api/auth/logout` | any | Logout |
-| GET | `/api/auth/me` | any | Get current user |
-| GET | `/api/documents` | admin | List all documents |
-| POST | `/api/documents` | admin | Upload document (multipart) |
-| PUT | `/api/documents/:id` | admin | Update / re-ingest document |
-| DELETE | `/api/documents/:id` | admin | Delete document + chunks |
-| POST | `/api/chat/sessions` | student/admin | Create chat session |
-| GET | `/api/chat/sessions` | student/admin | List own sessions |
-| GET | `/api/chat/sessions/:id` | student/admin | Get session + messages |
-| POST | `/api/chat/sessions/:id/messages` | student/admin | Send query, get RAG answer |
-| DELETE | `/api/chat/sessions/:id` | student/admin | Delete session |
-| GET | `/api/health` | none | Health check |
+| `POST` | `/api/auth/send-otp` | — | Send OTP to email for verification |
+| `POST` | `/api/auth/signup` | — | Create student account (OTP required) |
+| `POST` | `/api/auth/login` | — | Login → returns `{ token, user }` |
+| `POST` | `/api/auth/logout` | any | Logout |
+| `GET` | `/api/auth/me` | any | Get current user profile |
+| `GET` | `/api/documents` | admin | List all documents |
+| `POST` | `/api/documents` | admin | Upload document (multipart/form-data) |
+| `PUT` | `/api/documents/:id` | admin | Replace / re-ingest document |
+| `DELETE` | `/api/documents/:id` | admin | Delete document + all its chunks |
+| `POST` | `/api/documents/scrape` | admin | Ingest a web page by URL |
+| `POST` | `/api/chat/sessions` | auth | Create new chat session |
+| `GET` | `/api/chat/sessions` | auth | List all sessions for current user |
+| `GET` | `/api/chat/sessions/:id` | auth | Get session with full message history |
+| `POST` | `/api/chat/sessions/:id/messages` | auth | Send query → SSE streaming RAG response |
+| `DELETE` | `/api/chat/sessions/:id` | auth | Delete session + messages |
+| `GET` | `/api/health` | — | Health check |
+
+> **Auth**: All protected routes require `Authorization: Bearer <token>` header.  
+> The `/messages` endpoint returns **Server-Sent Events (SSE)** — `token` events stream the answer, followed by a `done` event with the saved message object.
 
 ---
 
-## RAG Pipeline
+## 🧠 RAG Pipeline
 
 ```
-Query → Embed (OpenRouter) → Atlas Vector Search (top_k=5)
-      → Filter by relevance threshold (default 0.75)
-      → If 0 chunks → Abstain (no LLM call)
-      → Assemble context → Call LLM (OpenRouter) with strict prompt
-      → Return answer + citations → Persist messages
+User Query
+    │
+    ▼
+Embed query (text-embedding-3-small via OpenRouter)
+    │
+    ▼
+Atlas Vector Search — cosine similarity, top_k=15
+    │
+    ▼
+Filter by relevance threshold (default 0.40)
+    │
+    ├── 0 chunks found → Abstain (no LLM call, return polite refusal)
+    │
+    └── Chunks found → Assemble numbered context block
+            │
+            ▼
+        Call LLM (gpt-4o-mini via OpenRouter, streaming)
+            │
+            ▼
+        Stream tokens → SSE to frontend
+            │
+            ▼
+        Save answer + citations to MongoDB
+            │
+            ▼
+        Send `done` event with persisted message
 ```
+
+---
+
+## 🔧 Known Production Gotchas
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| SMTP email fails on Render | Render blocks ports 25, 465, 587 | Use **Brevo HTTP API** (`BREVO_API_KEY`) |
+| 404 on page refresh (Vercel) | Vercel doesn't know about SPA routes | `frontend/vercel.json` rewrites all routes to `index.html` |
+| Mobile chat auth fails | iOS Safari blocks cross-origin `SameSite=None` cookies | JWT stored in `localStorage`, sent as `Authorization: Bearer` header |
+| CORS error on mobile | `CORS_ORIGIN` set to `localhost` only | Set to `https://your-app.vercel.app,http://localhost:5173` |
+
+---
+
+## 📄 License
+
+MIT
