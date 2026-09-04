@@ -11,7 +11,9 @@ const openai = new OpenAI({
   },
 });
 
-const LLM_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/auto';
+const LLM_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+console.log(`[RAG] Using LLM model: ${LLM_MODEL}`);
+console.log(`[RAG] OpenRouter key set: ${!!process.env.OPENROUTER_API_KEY}`);
 
 const SYSTEM_PROMPT = `You are a helpful college information assistant. Your job is to answer students' questions using ONLY the information provided in the context below.
 
@@ -77,20 +79,45 @@ export async function generateAnswer(
   }
 
   let answerText = '';
-  
+
   if (onToken) {
-    const stream = await openai.chat.completions.create({
-      model: LLM_MODEL,
-      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
-      max_tokens: 4096,
-      temperature: 0.1,
-      stream: true,
-    });
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
-      if (content) {
-        answerText += content;
-        onToken(content);
+    try {
+      const stream = await openai.chat.completions.create({
+        model: LLM_MODEL,
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+        max_tokens: 4096,
+        temperature: 0.1,
+        stream: true,
+      });
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          answerText += content;
+          onToken(content);
+        }
+      }
+    } catch (streamErr) {
+      console.error('[RAG] Streaming error:', streamErr);
+      // Fall through to non-streaming fallback below
+    }
+
+    // If stream returned nothing, fall back to non-streaming call
+    if (!answerText.trim()) {
+      console.warn('[RAG] Stream returned empty — falling back to non-streaming call');
+      try {
+        const response = await openai.chat.completions.create({
+          model: LLM_MODEL,
+          messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+          max_tokens: 4096,
+          temperature: 0.1,
+          stream: false,
+        });
+        answerText = response.choices[0]?.message?.content?.trim() ?? '';
+        console.log(`[RAG] Fallback got ${answerText.length} chars`);
+        // Re-emit as a single token so the frontend shows the response
+        if (answerText && onToken) onToken(answerText);
+      } catch (fallbackErr) {
+        console.error('[RAG] Fallback also failed:', fallbackErr);
       }
     }
   } else {

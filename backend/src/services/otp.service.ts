@@ -54,17 +54,27 @@ export async function sendOTP(email: string): Promise<void> {
     throw new Error('Email not configured. Set SMTP_USER and SMTP_PASS in your environment variables.');
   }
 
+  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // Explicitly resolve to IPv4 — Render's free tier can't reach smtp.gmail.com via IPv6
+  let resolvedHost = smtpHost;
+  try {
+    const { resolve4 } = await import('dns/promises');
+    const [ipv4] = await resolve4(smtpHost);
+    resolvedHost = ipv4;
+    console.log(`[OTP] Resolved ${smtpHost} → ${resolvedHost} (IPv4)`);
+  } catch (dnsErr) {
+    console.warn(`[OTP] IPv4 DNS resolution failed, using hostname: ${dnsErr}`);
+  }
+
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    host: resolvedHost,
     port,
     secure: port === 465,
     auth: { user: smtpUser, pass: smtpPass },
-    // tls family:4 forces IPv4 — prevents ENETUNREACH on Render where IPv6 SMTP is blocked
-    tls: { family: 4 },
-  } as any);
+    tls: { rejectUnauthorized: false },
+  });
 
   await transporter.sendMail({
     from: process.env.SMTP_FROM || `"KIOT Assistant" <${smtpUser}>`,
