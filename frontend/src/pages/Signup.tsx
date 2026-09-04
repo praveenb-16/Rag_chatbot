@@ -174,14 +174,33 @@ export default function Signup() {
               {otpMsg && <p style={{ fontSize: 12, marginTop: 4, color: otpMsg.includes('Verification') ? '#16A34A' : '#DC2626' }}>{otpMsg}</p>}
             </div>
 
-            {otpSent && (
-              <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                <label htmlFor="signup-otp" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
-                  Enter 6-digit OTP
-                </label>
-                <input id="signup-otp" type="text" inputMode="numeric" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••" style={{ ...inputStyle(false), letterSpacing: '0.2em', fontSize: 18, fontWeight: 700, textAlign: 'center', borderColor: otp.length === 6 ? '#22C55E' : 'var(--border)' }} onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue)'; }} onBlur={e => { e.currentTarget.style.borderColor = otp.length === 6 ? '#22C55E' : 'var(--border)'; }} />
+            {/* OTP field — always visible so user can enter code immediately after it arrives */}
+            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+              <label htmlFor="signup-otp" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
+                Verification code
+                {!otpSent && <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6 }}>(enter your email above and click Verify)</span>}
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  id="signup-otp"
+                  type="text"
+                  inputMode="numeric"
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Enter 6-digit code"
+                  disabled={!otpSent}
+                  style={{
+                    ...inputStyle(false),
+                    flex: 1,
+                    letterSpacing: '0.25em', fontSize: 20, fontWeight: 700, textAlign: 'center',
+                    borderColor: otp.length === 6 ? '#22C55E' : 'var(--border)',
+                    opacity: !otpSent ? 0.5 : 1,
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue)'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = otp.length === 6 ? '#22C55E' : 'var(--border)'; }}
+                />
               </div>
-            )}
+            </div>
 
             <div>
               <label htmlFor="signup-password" style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>Password</label>
@@ -228,7 +247,7 @@ export default function Signup() {
                   </svg>
                   Creating account…
                 </>
-              ) : 'Create account'}
+              ) : 'Create account →'}
             </button>
           </form>
 

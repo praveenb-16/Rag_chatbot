@@ -257,25 +257,7 @@ export function ChatInput({ onSend, disabled = false, value, onChange }: ChatInp
               : '0 2px 8px rgba(0,0,0,0.04)',
           transition: 'all 0.2s',
         }}>
-          {/* + Button */}
-          <button
-            aria-label="Add attachment"
-            title="Attach file"
-            style={{
-              width: 32, height: 32, border: 'none', borderRadius: '50%',
-              background: 'transparent', color: 'var(--text-muted)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', flexShrink: 0, alignSelf: 'center',
-              transition: 'background 0.15s, color 0.15s'
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-3)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
+
 
           {/* Textarea — starts single-line, grows with content */}
           <textarea
