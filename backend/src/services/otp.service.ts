@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
 import OtpRecord from '../models/OtpRecord';
 
 const OTP_EXPIRES_MS =
@@ -32,8 +31,11 @@ function buildHtml(otp: string): string {
 }
 
 /**
- * Sends OTP via Gmail SMTP (nodemailer).
- * server.ts sets dns.setDefaultResultOrder('ipv4first') so Gmail resolves to IPv4 on Render.
+ * Sends OTP via Brevo HTTP API (no SMTP ports — works on Render free tier).
+ * Render blocks outbound SMTP (ports 25/465/587), so we must use an HTTP email API.
+ *
+ * Setup: https://app.brevo.com → sign in → SMTP & API → API Keys → Create key
+ * Then add as BREVO_API_KEY in Render environment.
  */
 export async function sendOTP(email: string): Promise<void> {
   const normalised = email.toLowerCase();
@@ -47,44 +49,42 @@ export async function sendOTP(email: string): Promise<void> {
     { upsert: true, new: true }
   );
 
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-
-  if (!smtpUser || !smtpPass) {
-    throw new Error('Email not configured. Set SMTP_USER and SMTP_PASS in your environment variables.');
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      'BREVO_API_KEY is not set. Add it in Render → Environment. Get one free at https://app.brevo.com'
+    );
   }
 
-  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
-
-  // Explicitly resolve to IPv4 — Render's free tier can't reach smtp.gmail.com via IPv6
-  let resolvedHost = smtpHost;
-  try {
-    const { resolve4 } = await import('dns/promises');
-    const [ipv4] = await resolve4(smtpHost);
-    resolvedHost = ipv4;
-    console.log(`[OTP] Resolved ${smtpHost} → ${resolvedHost} (IPv4)`);
-  } catch (dnsErr) {
-    console.warn(`[OTP] IPv4 DNS resolution failed, using hostname: ${dnsErr}`);
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER;
+  if (!senderEmail) {
+    throw new Error('Set BREVO_SENDER_EMAIL (or SMTP_USER) in Render environment to use as the sender address.');
   }
 
-  const transporter = nodemailer.createTransport({
-    host: resolvedHost,
-    port,
-    secure: port === 465,
-    auth: { user: smtpUser, pass: smtpPass },
-    tls: { rejectUnauthorized: false },
+  console.log(`[OTP] Sending via Brevo HTTP API to ${normalised} from ${senderEmail}`);
+
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: 'KIOT Assistant', email: senderEmail },
+      to: [{ email: normalised }],
+      subject: `${otp} — Your KIOT Assistant verification code`,
+      htmlContent: buildHtml(otp),
+      textContent: `Your KIOT Assistant verification code is: ${otp}\n\nExpires in ${process.env.OTP_EXPIRES_MINUTES || 10} minutes.`,
+    }),
   });
 
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || `"KIOT Assistant" <${smtpUser}>`,
-    to: normalised,
-    subject: `${otp} — Your KIOT Assistant verification code`,
-    html: buildHtml(otp),
-    text: `Your KIOT verification code is: ${otp}\n\nExpires in ${process.env.OTP_EXPIRES_MINUTES || 10} minutes.`,
-  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(`Brevo API error ${res.status}: ${JSON.stringify(body)}`);
+  }
 
-  console.log(`📧 OTP sent to ${normalised} via Gmail SMTP (expires ${expiresAt.toISOString()})`);
+  console.log(`[OTP] ✅ Sent to ${normalised} via Brevo (expires ${expiresAt.toISOString()})`);
 }
 
 /** Verifies OTP — single atomic findOneAndDelete (prevents replay attacks). */
